@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Animal Diet 101 — Who eats what?</title>
+  <meta name="description" content="Animal Diet 101: learn what animals eat — herbivores, carnivores and omnivores — and play fun sorting, feeding and quiz games.">
+  <meta name="theme-color" content="#ffc53d">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦁</text></svg>">
+  <link rel="stylesheet" href="styles.css">
+  <script src="data.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#home" aria-label="Animal Diet 101 — home">
+      <span class="brand-emoji" aria-hidden="true">🦁</span>
+      <span class="brand-text">Animal Diet <b>101</b></span>
+    </a>
+    <nav class="topnav" aria-label="Game sections">
+      <a href="#learn" data-nav="learn"><span aria-hidden="true">📖</span> Learn</a>
+      <a href="#sort" data-nav="sort"><span aria-hidden="true">🧺</span> Sort It!</a>
+      <a href="#feed" data-nav="feed"><span aria-hidden="true">🍽️</span> Feed Me!</a>
+      <a href="#quiz" data-nav="quiz"><span aria-hidden="true">🧠</span> Quiz</a>
+      <a href="#notes" data-nav="notes"><span aria-hidden="true">📝</span> Notes</a>
+    </nav>
+    <button id="sound-toggle" class="icon-btn" type="button" aria-pressed="true" aria-label="Sound effects">
+      <span aria-hidden="true">🔊</span>
+    </button>
+  </header>
+
+  <main id="main">
+    <!-- ═════════════ HOME ═════════════ -->
+    <section class="screen" data-screen="home" aria-labelledby="home-title">
+      <div class="hero">
+        <div class="hero-ambient" aria-hidden="true">
+          <span class="orb orb-sun">☀️</span>
+          <span class="orb orb-leaf1">🍃</span>
+          <span class="orb orb-leaf2">🌿</span>
+          <span class="orb orb-cloud">☁️</span>
+        </div>
+        <div class="hero-text">
+          <p class="eyebrow">Learn · Play · Munch</p>
+          <h1 id="home-title" tabindex="-1">Animal Diet <span class="hl">101</span></h1>
+          <p class="lead">Who eats what in the wild? Meet <b id="animal-total">48</b> animals, watch quiz video clues, keep study notes, and play three fun games!</p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#sort">▶ Play Sort It!</a>
+            <a class="btn btn-ghost" href="#quiz">🎬 Video Quiz</a>
+            <a class="btn btn-ghost" href="#notes">📝 Study Notes</a>
+          </div>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <span>🦁</span><span>🐘</span><span>🐻</span><span>🦒</span><span>🐼</span><span>🦈</span><span>🐷</span><span>🦉</span><span>🐨</span>
+        </div>
+      </div>
+
+      <div class="parade-bar">
+        <div class="parade-viewport" aria-hidden="true">
+          <div class="parade-track">
+            <div class="parade-group">
+              <span class="p-item p-herb">🐘 🌿 Grass &amp; Fruit</span>
+              <span class="p-item p-carn">🦁 🥩 Savanna Meat</span>
+              <span class="p-item p-omni">🐻 🍓🐟 Berries &amp; Salmon</span>
+              <span class="p-item p-herb">🐼 🎋 Fresh Bamboo</span>
+              <span class="p-item p-carn">🐧 🐟 Ocean Fish</span>
+              <span class="p-item p-herb">🦋 🌸 Sweet Nectar</span>
+              <span class="p-item p-omni">🦝 🍎🥚 Forest Snacks</span>
+            </div>
+            <div class="parade-group">
+              <span class="p-item p-herb">🐘 🌿 Grass &amp; Fruit</span>
+              <span class="p-item p-carn">🦁 🥩 Savanna Meat</span>
+              <span class="p-item p-omni">🐻 🍓🐟 Berries &amp; Salmon</span>
+              <span class="p-item p-herb">🐼 🎋 Fresh Bamboo</span>
+              <span class="p-item p-carn">🐧 🐟 Ocean Fish</span>
+              <span class="p-item p-herb">🦋 🌸 Sweet Nectar</span>
+              <span class="p-item p-omni">🦝 🍎🥚 Forest Snacks</span>
+            </div>
+          </div>
+        </div>
+        <button type="button" class="motion-btn" id="motion-toggle">⏸ Pause animations</button>
+      </div>
+
+      <h2 class="section-title">The 3 big diets</h2>
+      <div class="diet-cards" id="diet-cards"></div>
+
+      <h2 class="section-title">Choose a game</h2>
+      <div class="mode-grid">
+        <a class="mode-card mode-learn" href="#learn">
+          <span class="mode-emoji" aria-hidden="true">📖</span>
+          <span class="mode-name">Animal Encyclopedia</span>
+          <span class="mode-desc">Tap animals to see their menu and fun facts.</span>
+          <span class="mode-best" id="best-learn"></span>
+        </a>
+        <a class="mode-card mode-sort" href="#sort">
+          <span class="mode-emoji" aria-hidden="true">🧺</span>
+          <span class="mode-name">Sort It!</span>
+          <span class="mode-desc">Race the clock: drop each animal in the right diet bin.</span>
+          <span class="mode-best" id="best-sort"></span>
+        </a>
+        <a class="mode-card mode-feed" href="#feed">
+          <span class="mode-emoji" aria-hidden="true">🍽️</span>
+          <span class="mode-name">Feed Me!</span>
+          <span class="mode-desc">Give each hungry animal the snack it would really eat.</span>
+          <span class="mode-best" id="best-feed"></span>
+        </a>
+        <a class="mode-card mode-quiz" href="#quiz">
+          <span class="mode-emoji" aria-hidden="true">🧠</span>
+          <span class="mode-name">Video Diet Quiz</span>
+          <span class="mode-desc">10 video-backed questions about teeth, tummies and food chains.</span>
+          <span class="mode-best" id="best-quiz"></span>
+        </a>
+        <a class="mode-card mode-notes" href="#notes">
+          <span class="mode-emoji" aria-hidden="true">📝</span>
+          <span class="mode-name">Study Notes</span>
+          <span class="mode-desc">Review key diet cheat sheets and write your own field notes.</span>
+          <span class="mode-best" id="best-notes"></span>
+        </a>
+      </div>
+
+      <h2 class="section-title">Your trophy shelf</h2>
+      <ul class="badges" id="badges"></ul>
+    </section>
+
+    <!-- ═════════════ LEARN ═════════════ -->
+    <section class="screen" data-screen="learn" aria-labelledby="learn-title" hidden>
+      <div class="screen-head">
+        <h1 id="learn-title" tabindex="-1">📖 Animal Encyclopedia</h1>
+        <p>Tap an animal to see what it eats. <span class="pill" id="seen-count"></span></p>
+      </div>
+
+      <details class="dictionary">
+        <summary>📚 Diet dictionary — fancy food words</summary>
+        <dl id="dictionary"></dl>
+      </details>
+
+      <div class="toolbar">
+        <div class="filters" role="group" aria-label="Filter by diet">
+          <button type="button" class="chip" data-filter="all" aria-pressed="true">All</button>
+          <button type="button" class="chip chip-herbivore" data-filter="herbivore" aria-pressed="false">🌿 Herbivores</button>
+          <button type="button" class="chip chip-carnivore" data-filter="carnivore" aria-pressed="false">🥩 Carnivores</button>
+          <button type="button" class="chip chip-omnivore" data-filter="omnivore" aria-pressed="false">🍽️ Omnivores</button>
+        </div>
+        <label class="search">
+          <span class="visually-hidden">Search animals</span>
+          <input type="search" id="search" placeholder="🔎 Search animals…" autocomplete="off">
+        </label>
+      </div>
+
+      <ul class="animal-grid" id="animal-grid"></ul>
+      <p class="empty" id="no-results" hidden>No animals found. Try another name!</p>
+    </section>
+
+    <!-- ═════════════ SORT IT ═════════════ -->
+    <section class="screen" data-screen="sort" aria-labelledby="sort-title" hidden>
+      <div class="screen-head">
+        <h1 id="sort-title" tabindex="-1">🧺 Sort It!</h1>
+        <p>Drag each animal into the correct diet bin — or just tap a bin. Keyboard: press <kbd>1</kbd>, <kbd>2</kbd> or <kbd>3</kbd>.</p>
+      </div>
+
+      <div class="start-panel" id="sort-start">
+        <div class="start-emoji" aria-hidden="true">⏱️</div>
+        <p>You have <b>60 seconds</b>. Each correct answer is worth 10 points, and streaks earn bonus points!</p>
+        <button type="button" class="btn btn-primary btn-big" data-start="sort">Start sorting</button>
+      </div>
+
+      <div class="game" id="sort-game" hidden>
+        <div class="hud">
+          <span>⭐ Score <b id="sort-score">0</b></span>
+          <span>🔥 Streak <b id="sort-streak">0</b></span>
+          <span>⏱️ <b id="sort-time">60</b>s</span>
+        </div>
+        <div class="timebar" aria-hidden="true"><div id="sort-timebar"></div></div>
+
+        <div class="stage">
+          <div class="drag-card" id="sort-card">
+            <span class="big-emoji" id="sort-emoji" aria-hidden="true"></span>
+            <span class="card-name" id="sort-name"></span>
+            <span class="drag-hint" aria-hidden="true">drag me ✋</span>
+          </div>
+          <p class="feedback" id="sort-feedback" aria-live="polite"></p>
+        </div>
+
+        <div class="bins">
+          <button type="button" class="bin bin-herbivore" data-diet="herbivore">
+            <span class="bin-emoji" aria-hidden="true">🌿</span>
+            <span class="bin-label">Herbivore</span>
+            <span class="bin-sub">plants only</span>
+            <kbd aria-hidden="true">1</kbd>
+          </button>
+          <button type="button" class="bin bin-carnivore" data-diet="carnivore">
+            <span class="bin-emoji" aria-hidden="true">🥩</span>
+            <span class="bin-label">Carnivore</span>
+            <span class="bin-sub">meat eater</span>
+            <kbd aria-hidden="true">2</kbd>
+          </button>
+          <button type="button" class="bin bin-omnivore" data-diet="omnivore">
+            <span class="bin-emoji" aria-hidden="true">🍽️</span>
+            <span class="bin-label">Omnivore</span>
+            <span class="bin-sub">eats both</span>
+            <kbd aria-hidden="true">3</kbd>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═════════════ FEED ME ═════════════ -->
+    <section class="screen" data-screen="feed" aria-labelledby="feed-title" hidden>
+      <div class="screen-head">
+        <h1 id="feed-title" tabindex="-1">🍽️ Feed Me!</h1>
+        <p>Each animal is hungry. Pick the food it would really eat in the wild.</p>
+      </div>
+
+      <div class="start-panel" id="feed-start">
+        <div class="start-emoji" aria-hidden="true">😋</div>
+        <p><b>10 hungry animals</b> are waiting. Can you feed them all correctly?</p>
+        <button type="button" class="btn btn-primary btn-big" data-start="feed">Start feeding</button>
+      </div>
+
+      <div class="game" id="feed-game" hidden>
+        <div class="hud">
+          <span>🍽️ Round <b id="feed-round">1</b>/10</span>
+          <span>⭐ Fed <b id="feed-score">0</b></span>
+        </div>
+        <div class="feed-stage">
+          <div class="feed-animal">
+            <p class="bubble" id="feed-bubble">I'm hungry!</p>
+            <span class="big-emoji" id="feed-emoji" aria-hidden="true"></span>
+            <h2 class="card-name" id="feed-name"></h2>
+          </div>
+          <div class="food-grid" id="food-grid" role="group" aria-label="Food choices"></div>
+        </div>
+        <div class="explain" id="feed-explain" hidden>
+          <p id="feed-explain-text"></p>
+          <button type="button" class="btn btn-primary" id="feed-next">Next animal ➜</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═════════════ QUIZ ═════════════ -->
+    <section class="screen" data-screen="quiz" aria-labelledby="quiz-title" hidden>
+      <div class="screen-head">
+        <h1 id="quiz-title" tabindex="-1">🧠 Video Diet Quiz</h1>
+        <p>Watch each mini-video clue and answer 10 questions about animal diets, teeth and food chains.</p>
+      </div>
+
+      <div class="start-panel" id="quiz-start">
+        <div class="start-emoji" aria-hidden="true">🎬</div>
+        <p>Answer <b>10 video questions</b>. Watch the animated habitat clue, then pick the right answer!</p>
+        <button type="button" class="btn btn-primary btn-big" data-start="quiz">Start quiz</button>
+      </div>
+
+      <div class="game" id="quiz-game" hidden>
+        <div class="hud">
+          <span>❓ Question <b id="quiz-num">1</b>/10</span>
+          <span>⭐ Correct <b id="quiz-score">0</b></span>
+        </div>
+        <div class="quiz-card">
+          <figure class="quiz-media">
+            <div class="video-frame">
+              <video id="quiz-video" controls muted loop playsinline preload="metadata" aria-describedby="quiz-video-caption">
+                <track id="quiz-track" kind="captions" srclang="en" label="English" default>
+              </video>
+            </div>
+            <figcaption id="quiz-video-caption" class="video-cap"></figcaption>
+            <details class="video-transcript" id="quiz-transcript-box">
+              <summary>📄 Video description &amp; captions</summary>
+              <p id="quiz-transcript-text"></p>
+            </details>
+          </figure>
+          <h2 class="quiz-q" id="quiz-q"></h2>
+          <div class="quiz-options" id="quiz-options" role="group" aria-labelledby="quiz-q"></div>
+        </div>
+        <div class="explain" id="quiz-explain" hidden>
+          <p id="quiz-explain-text"></p>
+          <div class="explain-actions">
+            <button type="button" class="btn btn-ghost" id="quiz-save-note">📝 Save to Notes</button>
+            <button type="button" class="btn btn-primary" id="quiz-next">Next question ➜</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═════════════ NOTES ═════════════ -->
+    <section class="screen" data-screen="notes" aria-labelledby="notes-title" hidden>
+      <div class="screen-head">
+        <h1 id="notes-title" tabindex="-1">📝 Study Notes</h1>
+        <p>Quick Animal Diet 101 cheat sheets plus your own personal field notebook, saved on this device.</p>
+      </div>
+
+      <h2 class="section-title notes-subhead">📚 Quick Study Sheet</h2>
+      <div class="study-grid" id="study-notes"></div>
+
+      <div class="notes-workspace">
+        <div class="note-composer">
+          <h2 id="composer-title">✍️ Add a Field Note</h2>
+          <form id="note-form">
+            <div class="form-row">
+              <div class="field">
+                <label for="note-title">Note title</label>
+                <input id="note-title" name="title" type="text" required maxlength="80" placeholder="e.g., Why flamingos turn pink" autocomplete="off">
+              </div>
+              <div class="field field-tag">
+                <label for="note-tag">Topic</label>
+                <select id="note-tag" name="tag">
+                  <option value="herbivore">🌿 Herbivore</option>
+                  <option value="carnivore">🥩 Carnivore</option>
+                  <option value="omnivore">🍽️ Omnivore</option>
+                  <option value="foodchain">🔗 Food Chain</option>
+                  <option value="fact">💡 Fun Fact</option>
+                  <option value="general">📝 General</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label for="note-body">Your note</label>
+              <textarea id="note-body" name="body" required maxlength="1000" placeholder="Write what you learned about an animal's diet, teeth, or food chain…" aria-describedby="note-hint"></textarea>
+              <p class="field-hint" id="note-hint">Saved automatically in your browser. You can also save facts straight from the Encyclopedia or Quiz!</p>
+            </div>
+            <div class="composer-actions">
+              <button type="submit" class="btn btn-primary" id="note-submit">💾 Save note</button>
+              <button type="button" class="btn btn-ghost" id="note-cancel" hidden>Cancel edit</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="notes-saved">
+          <div class="saved-head">
+            <h2 id="saved-notes-title">📒 My Field Notes <span class="pill" id="notes-count">0</span></h2>
+            <button type="button" class="btn btn-ghost btn-sm" id="export-notes">⬇️ Export .txt</button>
+          </div>
+          <div class="filters note-filters" role="group" aria-label="Filter notes by topic">
+            <button type="button" class="chip" data-note-filter="all" aria-pressed="true">All</button>
+            <button type="button" class="chip chip-herbivore" data-note-filter="herbivore" aria-pressed="false">🌿 Herbivore</button>
+            <button type="button" class="chip chip-carnivore" data-note-filter="carnivore" aria-pressed="false">🥩 Carnivore</button>
+            <button type="button" class="chip chip-omnivore" data-note-filter="omnivore" aria-pressed="false">🍽️ Omnivore</button>
+            <button type="button" class="chip" data-note-filter="foodchain" aria-pressed="false">🔗 Food Chain</button>
+            <button type="button" class="chip" data-note-filter="fact" aria-pressed="false">💡 Fun Fact</button>
+            <button type="button" class="chip" data-note-filter="general" aria-pressed="false">📝 General</button>
+          </div>
+          <ul class="notes-list" id="notes-list"></ul>
+          <p class="empty" id="notes-empty">No personal notes yet! Write your first note on the left, or tap <b>Save to Notes</b> while exploring animals or playing the quiz.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>Animal Diet 101 · Made for curious minds 🌍 · Progress is saved on this device.</p>
+    <button type="button" class="link-btn" id="reset-progress">Reset progress</button>
+  </footer>
+
+  <!-- Animal detail -->
+  <dialog id="animal-dialog" class="sheet" closedby="any" aria-labelledby="ad-title">
+    <div class="ad-head">
+      <span class="ad-emoji" id="ad-emoji" aria-hidden="true"></span>
+      <div>
+        <h1 id="ad-title"></h1>
+        <p class="ad-tags"><span class="diet-badge" id="ad-diet"></span> <span class="tag" id="ad-special"></span></p>
+      </div>
+    </div>
+    <h2>On the menu</h2>
+    <ul class="menu-list" id="ad-eats"></ul>
+    <h2>Fun fact</h2>
+    <p class="fact" id="ad-fact"></p>
+    <p class="ad-diet-note" id="ad-note"></p>
+    <form method="dialog" class="dialog-actions">
+      <button type="button" class="btn btn-ghost" id="ad-save-note">📝 Save to Notes</button>
+      <button class="btn btn-primary" autofocus>Got it!</button>
+    </form>
+  </dialog>
+
+  <!-- Results -->
+  <dialog id="result-dialog" class="sheet result" aria-labelledby="rd-title">
+    <div class="rd-stars" id="rd-stars" aria-hidden="true"></div>
+    <h1 id="rd-title">Great job!</h1>
+    <p class="rd-score" id="rd-score"></p>
+    <p id="rd-detail"></p>
+    <p class="rd-best" id="rd-best"></p>
+    <p class="rd-badge" id="rd-badge" hidden></p>
+    <form method="dialog" class="dialog-actions">
+      <button class="btn btn-ghost" value="home">🏠 Home</button>
+      <button class="btn btn-primary" value="again" autofocus>🔁 Play again</button>
+    </form>
+  </dialog>
+
+  <!-- Confirm reset -->
+  <dialog id="reset-dialog" class="sheet" aria-labelledby="reset-title">
+    <h1 id="reset-title">Reset all progress?</h1>
+    <p>This clears your best scores, trophies, discovered animals and saved notes.</p>
+    <form method="dialog" class="dialog-actions">
+      <button class="btn btn-ghost" value="cancel" autofocus>Keep my progress</button>
+      <button class="btn btn-danger" value="reset">Reset</button>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" aria-hidden="true" hidden></div>
+  <div class="visually-hidden" id="live" aria-live="polite"></div>
+</body>
+</html>
