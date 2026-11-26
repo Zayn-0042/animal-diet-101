@@ -437,8 +437,45 @@ window.AD101_AI = (() => {
         : `🦷 How Animal Teeth Match Each Diet:\n• **Herbivores:** strong incisors & flat, wide molars to cut and grind plants.\n• **Carnivores:** long, sharp pointed canines to grip and tear meat.\n• **Omnivores:** all 3 types — incisors, canines, and flat molars.`;
     }
 
-    // 5. YES / NO CHECK ("Is a rabbit a carnivore?", "Adakah lembu karnivor?")
-    const asksYesNo = /^(is|are|do|does|can|adakah|bolehkah|betulkah)\b/.test(ql);
+    // 5. CHOICE & YES/NO QUESTIONS ABOUT ANIMALS
+    // 5a. Choice of diet for 1 animal: "adakah beruang karnivor atau omnivor?", "is a bear a carnivore or omnivore?"
+    if (animals.length === 1 && diets.length >= 2) {
+      const a = I.getAnimal(lang, animals[0]);
+      const d = I.getDiet(lang, a.diet);
+      const foods = I.joinList(lang, a.eats.map((k) => I.getFood(lang, k).n.toLowerCase()));
+      const others = diets.filter((dk) => dk !== a.diet).map((dk) => I.getDiet(lang, dk).label.toLowerCase());
+      const notPart = others.length
+        ? (isMs ? ` (bukan ${I.joinList('ms', others)})` : ` (not ${I.joinList('en', others)})`)
+        : '';
+      return isMs
+        ? `${a.emoji} **${a.name}** ialah **${d.label}**${notPart}!\n• Ia makan **${foods}** — ${d.blurb[0].toLowerCase()}${d.blurb.slice(1)}\n• 💡 ${a.fact}`
+        : `${a.emoji} A **${a.name}** is ${I.article('en', d.label)} **${d.label}**${notPart}!\n• It eats **${foods}** — ${d.blurb[0].toLowerCase()}${d.blurb.slice(1)}\n• 💡 ${a.fact}`;
+    }
+
+    // 5b. Choice among 2+ animals for 1 diet: "which is a herbivore: lion or cow?", "antara singa dan lembu, mana satu karnivor?"
+    if (animals.length >= 2 && diets.length === 1 && /\b(which|who|or|antara|mana|atau|siapa)\b/.test(ql)) {
+      const targetDiet = diets[0];
+      const targetLbl = I.getDiet(lang, targetDiet).label;
+      const matches = animals.filter((a) => a.diet === targetDiet).map((a) => I.getAnimal(lang, a));
+      const nonMatches = animals.filter((a) => a.diet !== targetDiet).map((a) => I.getAnimal(lang, a));
+      if (matches.length) {
+        const mNames = matches.map((a) => `${a.emoji} **${a.name}**`).join(isMs ? ' dan ' : ' and ');
+        const extra = nonMatches.map((a) => `${a.name} (${I.getDiet(lang, a.diet).label.toLowerCase()})`).join(', ');
+        return isMs
+          ? `✅ ${mNames} ialah **${targetLbl}**!${extra ? ` (${extra})` : ''}`
+          : `✅ ${mNames} ${matches.length === 1 ? 'is' : 'are'} ${matches.length === 1 ? `${I.article('en', targetLbl)} ` : ''}**${targetLbl}${matches.length === 1 ? '' : 's'}**!${extra ? ` (${extra})` : ''}`;
+      }
+      const actuals = animals.map((a) => {
+        const loc = I.getAnimal(lang, a);
+        return `${loc.emoji} **${loc.name}** (${I.getDiet(lang, loc.diet).label})`;
+      }).join(', ');
+      return isMs
+        ? `❌ Tiada antara itu ialah ${targetLbl.toLowerCase()}: ${actuals}.`
+        : `❌ Neither is ${I.article('en', targetLbl)} ${targetLbl.toLowerCase()}: ${actuals}.`;
+    }
+
+    // 5c. YES / NO CHECK ("Is a rabbit a carnivore?", "Adakah lembu karnivor?", "beruang ni karnivor ke?")
+    const asksYesNo = /^(is|are|do|does|can|adakah|bolehkah|betulkah)\b/.test(ql) || /\b(ke|kah)\??$/.test(ql);
     if (asksYesNo && animals.length === 1) {
       const a = I.getAnimal(lang, animals[0]);
       const d = I.getDiet(lang, a.diet);
