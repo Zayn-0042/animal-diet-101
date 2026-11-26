@@ -4,43 +4,162 @@
 window.AD101_TTS = (() => {
   const synth = typeof window !== 'undefined' && 'speechSynthesis' in window ? window.speechSynthesis : null;
   let cachedVoices = [];
+  let activeAudio = null;
+  let playToken = 0;
+
   const loadVoices = () => { if (synth) cachedVoices = synth.getVoices() || []; };
   if (synth) {
     loadVoices();
     synth.addEventListener?.('voiceschanged', loadVoices);
   }
 
-  const pickVoice = (lang) => {
+  // Score browser voices so we pick warm, natural, friendly voices (never robotic David/Zira or English-accented BM!)
+  const pickBestVoice = (lang) => {
     if (!cachedVoices.length) loadVoices();
-    const prefs = lang === 'ms'
-      ? ['ms-MY', 'ms', 'id-ID', 'id']
-      : ['en-US', 'en-GB', 'en'];
-    for (const p of prefs) {
-      const exact = cachedVoices.find((v) => v.lang.toLowerCase() === p.toLowerCase());
-      if (exact) return exact;
-      const starts = cachedVoices.find((v) => v.lang.toLowerCase().startsWith(p.toLowerCase()));
-      if (starts) return starts;
+    let best = null;
+    let bestScore = -1;
+
+    for (const v of cachedVoices) {
+      const vl = (v.lang || '').toLowerCase();
+      const vn = (v.name || '').toLowerCase();
+      let score = -1;
+
+      if (lang === 'ms') {
+        // ONLY accept genuine Malay (ms) or Indonesian (id) voices — NEVER English!
+        if (vl.startsWith('ms')) {
+          score = 80;
+          if (/natural|neural|online|google|yasmin|amira/.test(vn)) score += 30;
+        } else if (vl.startsWith('id')) {
+          score = 60;
+          if (/natural|neural|online|google|gadis|damayanti/.test(vn)) score += 25;
+        }
+      } else {
+        if (vl.startsWith('en')) {
+          score = 40;
+          // Strongly prefer warm, friendly neural/female voices for primary school kids
+          if (/ana|aria|jenny|emma|samantha|karen|ava|tessa|hazel|susan|libby|sonia|natasha/.test(vn)) score += 35;
+          if (/natural|neural|online/.test(vn)) score += 35;
+          if (/google/.test(vn)) score += 25;
+          if (/female/.test(vn)) score += 15;
+          // Penalize flat legacy desktop voices
+          if (/david|mark|richard|george|zira/.test(vn) && !/online|natural/.test(vn)) score -= 30;
+        }
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        best = v;
+      }
     }
-    return null;
+    return { voice: best, score: bestScore };
+  };
+
+  // Split text cleanly into <= 165-char speech chunks at sentence/clause boundaries
+  const chunkText = (text, maxLen = 165) => {
+    const parts = text.split(/(?<=[.!?।;:])\s+|\n+/);
+    const chunks = [];
+    for (const part of parts) {
+      const p = part.trim();
+      if (!p) continue;
+      if (p.length <= maxLen) { chunks.push(p); continue; }
+      const words = p.split(/\s+/);
+      let cur = '';
+      for (const w of words) {
+        if ((cur + ' ' + w).trim().length > maxLen) {
+          if (cur) chunks.push(cur);
+          cur = w;
+        } else {
+          cur = cur ? `${cur} ${w}` : w;
+        }
+      }
+      if (cur) chunks.push(cur);
+    }
+    return chunks;
   };
 
   const stop = () => {
+    playToken += 1;
+    if (activeAudio) {
+      try { activeAudio.pause(); activeAudio.src = ''; } catch { /* ignore */ }
+      activeAudio = null;
+    }
     try { synth?.cancel(); } catch { /* ignore */ }
   };
 
-  const speak = (text, lang = 'en', { rate = 0.92, pitch = 1.04, onEnd = null } = {}) => {
-    if (!synth || !text) { onEnd?.(); return false; }
-    stop();
-    const clean = String(text).replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '').replace(/\s+/g, ' ').trim();
-    if (!clean) { onEnd?.(); return false; }
+  // Authentic neural TTS audio fallback (ensures native Malay pronunciation even on Windows PCs without ms-MY packs,
+  // and warm friendly English when only flat legacy David/Zira voices exist!)
+  const playCloudAudioChunks = (chunks, tl, rate, token, onFail, onEnd) => {
+    let idx = 0;
+    const playNext = () => {
+      if (token !== playToken) return;
+      if (idx >= chunks.length) { activeAudio = null; onEnd?.(); return; }
+      const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(tl)}&q=${encodeURIComponent(chunks[idx])}`;
+      idx += 1;
+      const audio = new Audio();
+      audio.referrerPolicy = 'no-referrer';
+      audio.playbackRate = Math.max(0.8, Math.min(1.15, rate));
+      audio.src = url;
+      activeAudio = audio;
+      audio.onended = playNext;
+      audio.onerror = () => {
+        if (token !== playToken) return;
+        activeAudio = null;
+        onFail();
+      };
+      audio.play().catch(() => {
+        if (token !== playToken) return;
+        activeAudio = null;
+        onFail();
+      });
+    };
+    playNext();
+  };
+
+  const speakNative = (clean, lang, voice, rate, pitch, onEnd) => {
+    if (!synth) { onEnd?.(); return false; }
     const u = new SpeechSynthesisUtterance(clean);
     u.lang = lang === 'ms' ? 'ms-MY' : 'en-US';
-    const voice = pickVoice(lang);
     if (voice) u.voice = voice;
     u.rate = rate;
     u.pitch = pitch;
     if (onEnd) { u.onend = onEnd; u.onerror = onEnd; }
     try { synth.speak(u); return true; } catch { onEnd?.(); return false; }
+  };
+
+  const speak = (text, lang = 'en', { rate = 0.96, pitch = 1.08, onEnd = null } = {}) => {
+    if (!text) { onEnd?.(); return false; }
+    stop();
+    const token = playToken;
+    const clean = String(text)
+      .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '')
+      .replace(/\*\*/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!clean) { onEnd?.(); return false; }
+
+    const { voice, score } = pickBestVoice(lang);
+    const hasHighQualityNative = lang === 'ms' ? score >= 100 : score >= 75;
+
+    // If the device has a high-quality Neural/Online/Google voice in the exact language, use it instantly!
+    if (hasHighQualityNative && synth) {
+      return speakNative(clean, lang, voice, rate, pitch, onEnd);
+    }
+
+    // Otherwise (e.g., Windows Chrome lacking a Malay voice or only having flat David/Zira),
+    // play authentic warm neural audio in the exact target language (ms or en), falling back to Web Speech offline!
+    if (typeof Audio !== 'undefined') {
+      const chunks = chunkText(clean, 165);
+      playCloudAudioChunks(
+        chunks,
+        lang === 'ms' ? 'ms' : 'en',
+        rate,
+        token,
+        () => speakNative(clean, lang, voice, rate, pitch, onEnd),
+        onEnd
+      );
+      return true;
+    }
+    return speakNative(clean, lang, voice, rate, pitch, onEnd);
   };
 
   const spellLetters = (word) =>
@@ -52,12 +171,12 @@ window.AD101_TTS = (() => {
     const spoken = lang === 'ms'
       ? `${clean}. Dieja: ${letters}. ${clean}!`
       : `${clean}. Spelled: ${letters}. ${clean}!`;
-    speak(spoken, lang, { rate: 0.78, pitch: 1.05 });
+    speak(spoken, lang, { rate: 0.85, pitch: 1.06 });
     return spellLetters(clean);
   };
 
   return {
-    supported: Boolean(synth),
+    supported: Boolean(synth || typeof Audio !== 'undefined'),
     speak,
     spellWord,
     spellLetters,

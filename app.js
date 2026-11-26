@@ -284,6 +284,7 @@
     renderMotion();
     renderDbBadges();
     renderUserChrome();
+    syncLoginRoleUI();
     renderAiChrome();
     refreshActiveScreen();
   };
@@ -317,15 +318,34 @@
     }
   };
 
-  // Teacher email/password visibility & Sign-In vs Register tab
+  // Teacher email/password visibility (Email ONLY shown on Register, Password + Eye toggle on both!)
   let teacherAuthMode = 'signin';
+  const passInput = $('#login-password');
+  const togglePassBtn = $('#toggle-password');
+
+  const setPasswordVisible = (visible) => {
+    passInput.type = visible ? 'text' : 'password';
+    togglePassBtn.setAttribute('aria-pressed', String(visible));
+    togglePassBtn.setAttribute('aria-label', visible ? t('hidePassword') : t('showPassword'));
+    togglePassBtn.firstElementChild.textContent = visible ? '🙈' : '👁️';
+  };
+  togglePassBtn.addEventListener('click', () => {
+    setPasswordVisible(passInput.type === 'password');
+    passInput.focus();
+  });
+
   const syncLoginRoleUI = () => {
     const isTeacher = $('input[name="role"]:checked')?.value === 'teacher';
+    const isReg = teacherAuthMode === 'register';
     $('#teacher-auth-box').hidden = !isTeacher;
-    $('#login-email').required = isTeacher;
-    $('#login-password').required = isTeacher;
-    $('#login-username').required = !isTeacher || teacherAuthMode === 'register';
-    $('#login-password').autocomplete = teacherAuthMode === 'register' ? 'new-password' : 'current-password';
+    $('#teacher-email-field').hidden = !isReg;
+    $('#teacher-auth-fields').classList.toggle('two-col', isReg);
+    $('#login-email').required = isTeacher && isReg;
+    passInput.required = isTeacher;
+    $('#login-username').required = true;
+    passInput.autocomplete = isReg ? 'new-password' : 'current-password';
+    $('#teacher-auth-notice').textContent = isReg ? t('loginTeacherNotice') : t('loginTeacherSignInHint');
+    setPasswordVisible(false);
     $('#login-error').hidden = true;
   };
   $$('input[name="role"]').forEach((r) => r.addEventListener('change', syncLoginRoleUI));
@@ -340,6 +360,7 @@
     const code = err?.code || '';
     if (code === 'ad101/invalid-email' || code === 'auth/invalid-email') return t('loginErrorEmail');
     if (code === 'ad101/weak-password' || code === 'auth/weak-password') return t('loginErrorPass');
+    if (code === 'ad101/teacher-not-found') return t('loginErrorTeacherNotFound');
     if (code === 'auth/email-already-in-use') return t('loginErrorInUse');
     if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') return t('loginErrorCred');
     if (code === 'auth/operation-not-allowed') return t('loginErrorProvider');
@@ -351,16 +372,10 @@
     const name = $('#login-username').value.trim();
     const role = ($('input[name="role"]:checked')?.value === 'teacher') ? 'teacher' : 'student';
     const email = $('#login-email').value.trim();
-    const password = $('#login-password').value;
+    const password = passInput.value;
     const errEl = $('#login-error');
 
-    if (role === 'student' && name.length < 2) {
-      errEl.textContent = t('loginErrorName');
-      errEl.hidden = false;
-      $('#login-username').focus();
-      return;
-    }
-    if (role === 'teacher' && teacherAuthMode === 'register' && name.length < 2) {
+    if (name.length < 2) {
       errEl.textContent = t('loginErrorName');
       errEl.hidden = false;
       $('#login-username').focus();
@@ -372,7 +387,8 @@
     try {
       const res = await DB.loginOrRegister(name, role, { email, password, authMode: teacherAuthMode });
       user = res.user;
-      $('#login-password').value = '';
+      passInput.value = '';
+      setPasswordVisible(false);
       renderUserChrome();
       renderAiChrome();
       sfx('win');

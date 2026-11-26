@@ -73,6 +73,23 @@ rules_version = '2';
 //   - authorName: string (required, length 1..40)
 //   - updatedAt: timestamp | int >= 0 (required)
 //
+// Collection: teacherDirectory
+// Document ID: {nameKey} (normalized teacher username, e.g. 'cikgu_aminah',
+//   length 2..40, no '/' or '.')
+// Fields (strict schema):
+//   - email: string (required, length 3..120, valid email, must match request.auth.token.email on write)
+//   - ownerUid: string (required, immutable, length 1..128, must match request.auth.uid)
+//   - updatedAt: timestamp | int >= 0 (required)
+//
+// Privacy / Access Model for teacherDirectory:
+//   - Point lookup (`get`) is allowed for authenticated sessions (including fresh
+//     anonymous browser sessions) so teachers can sign in using Name + Password
+//     without re-typing their email on every sign-in.
+//   - Collection listing (`list`) is strictly denied (`false`) to prevent email
+//     enumeration/scraping.
+//   - Writes (`create`, `update`, `delete`) require Email/Password auth and strict
+//     ownership + token email verification.
+//
 // ===============================================================
 
 service cloud.firestore {
@@ -180,6 +197,12 @@ service cloud.firestore {
              val != '.' &&
              val != '..' &&
              !val.matches('.*[/].*');
+    }
+
+    // Validate normalized teacher directory key (length 2..40, no slashes or dots)
+    function isValidTeacherNameKey(nameKey) {
+      return isValidString(nameKey, 2, 40) &&
+             nameKey.matches('^[^/.]+$');
     }
 
     // Validate a fixed 4-option quiz answer list and each element's length
@@ -345,6 +368,16 @@ service cloud.firestore {
              isValidTimestampOrMillis(data.updatedAt);
     }
 
+    function isValidTeacherDirectory(data) {
+      let allowedFields = ['email', 'ownerUid', 'updatedAt'];
+      return hasOnlyAllowedFields(allowedFields) &&
+             hasRequiredFields(allowedFields) &&
+             isValidString(data.email, 3, 120) &&
+             isValidEmail(data.email) &&
+             isValidString(data.ownerUid, 1, 128) &&
+             isValidTimestampOrMillis(data.updatedAt);
+    }
+
     // ===============================================================
     // Collection Rules
     // ===============================================================
@@ -449,7 +482,33 @@ service cloud.firestore {
                        isTeacherSession();
     }
 
-    // 5. Default Deny Catch-All
+    // 5. Teacher Username -> Email Lookup Directory (Name + Password sign-in)
+    //    - Point lookup (`get`) allowed for authenticated users so teachers can
+    //      resolve their own email from a fresh anonymous browser session.
+    //    - `list` strictly denied to prevent email enumeration/scraping.
+    //    - Writes strictly limited to Email/Password-authenticated owners matching
+    //      their verified token email.
+    match /teacherDirectory/{nameKey} {
+      allow get: if isAuthenticated() &&
+                    isValidTeacherNameKey(nameKey);
+      allow list: if false;
+      allow create: if isEmailAuth() &&
+                       isValidTeacherNameKey(nameKey) &&
+                       isValidTeacherDirectory(request.resource.data) &&
+                       request.resource.data.ownerUid == request.auth.uid &&
+                       request.resource.data.email == request.auth.token.email;
+      allow update: if isEmailAuth() &&
+                       isValidTeacherNameKey(nameKey) &&
+                       resource.data.ownerUid == request.auth.uid &&
+                       isValidTeacherDirectory(request.resource.data) &&
+                       areImmutableFieldsUnchanged(['ownerUid']) &&
+                       request.resource.data.ownerUid == resource.data.ownerUid &&
+                       request.resource.data.email == request.auth.token.email;
+      allow delete: if isEmailAuth() &&
+                       resource.data.ownerUid == request.auth.uid;
+    }
+
+    // 6. Default Deny Catch-All
     match /{document=**} {
       allow read, write: if false;
     }

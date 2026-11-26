@@ -216,23 +216,62 @@ window.AD101_DB = (() => {
     return (h >>> 0).toString(16);
   };
 
+  const TEACHER_EMAIL_CACHE_KEY = 'ad101-teacher-emails';
+  const getTeacherEmailCache = () => readJson(TEACHER_EMAIL_CACHE_KEY, {});
+  const cacheTeacherEmail = (nameKey, email) => {
+    if (!nameKey || !email) return;
+    const map = getTeacherEmailCache();
+    map[nameKey] = email;
+    writeJson(TEACHER_EMAIL_CACHE_KEY, map);
+  };
+
+  async function resolveTeacherEmail(nameInput) {
+    const raw = String(nameInput || '').trim().toLowerCase();
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) return raw;
+    const nameKey = normalizeName(raw);
+    const cached = getTeacherEmailCache()[nameKey];
+    if (cached) return cached;
+    if (mode === 'firebase' && fb) {
+      try {
+        const { doc, getDoc } = fb.fns;
+        const snap = await getDoc(doc(fb.db, 'teacherDirectory', nameKey));
+        if (snap.exists() && snap.data()?.email) {
+          cacheTeacherEmail(nameKey, snap.data().email);
+          return snap.data().email;
+        }
+      } catch { /* fall through */ }
+    }
+    return '';
+  }
+
   async function loginOrRegister(username, role, opts = {}) {
     const cleanRole = role === 'teacher' ? 'teacher' : 'student';
-    const cleanEmail = String(opts.email || '').trim().toLowerCase().slice(0, 120);
+    let cleanEmail = String(opts.email || '').trim().toLowerCase().slice(0, 120);
     const password = String(opts.password || '');
     const authMode = opts.authMode === 'register' ? 'register' : 'signin';
-    const cleanName = String(username || '').trim().slice(0, 40) || (cleanEmail.split('@')[0] || 'Teacher');
+    const rawName = String(username || '').trim().slice(0, 40);
+    const cleanName = rawName || (cleanEmail.split('@')[0] || 'Teacher');
 
     if (cleanRole === 'teacher') {
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-        const err = new Error('INVALID_EMAIL');
-        err.code = 'ad101/invalid-email';
-        throw err;
-      }
       if (password.length < 6) {
         const err = new Error('WEAK_PASSWORD');
         err.code = 'ad101/weak-password';
         throw err;
+      }
+      if (authMode === 'register') {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+          const err = new Error('INVALID_EMAIL');
+          err.code = 'ad101/invalid-email';
+          throw err;
+        }
+      } else {
+        // Teacher Sign In uses Name + Password (no email box needed!)
+        cleanEmail = await resolveTeacherEmail(rawName);
+        if (!cleanEmail) {
+          const err = new Error('TEACHER_NOT_FOUND');
+          err.code = 'ad101/teacher-not-found';
+          throw err;
+        }
       }
     }
 
@@ -272,7 +311,8 @@ window.AD101_DB = (() => {
       let userDoc;
       if (snap.exists()) {
         const existing = snap.data();
-        const finalName = cleanRole === 'teacher' && !String(username || '').trim() ? existing.username : cleanName;
+        const typedEmailAsName = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawName);
+        const finalName = (cleanRole === 'teacher' && (!rawName || typedEmailAsName)) ? existing.username : cleanName;
         activeSession.username = finalName;
         writeJson(SESSION_KEY, activeSession);
         await writeSessionDoc(activeSession);
@@ -287,37 +327,66 @@ window.AD101_DB = (() => {
         await setDoc(ref, created);
         userDoc = { id: userDocId, ...created };
       }
+
+      // Save Teacher name -> email mapping so future Sign-Ins only require Name + Password!
+      if (cleanRole === 'teacher' && userDoc.username && cleanEmail) {
+        const nameKey = normalizeName(userDoc.username);
+        cacheTeacherEmail(nameKey, cleanEmail);
+        try {
+          await setDoc(doc(fb.db, 'teacherDirectory', nameKey), {
+            email: cleanEmail,
+            ownerUid: uid,
+            updatedAt: Date.now(),
+          });
+        } catch { /* local cache still works even before rules update */ }
+      }
       return { session: activeSession, user: userDoc, isNew };
     }
 
     // Local Mode (offline fallback)
     const local = getLocalDb();
     if (cleanRole === 'teacher') {
-      const userDocId = `teacher_${normalizeName(cleanEmail)}`;
-      const existing = local.users[userDocId];
-      const passHash = simpleHash(`${cleanEmail}:${password}`);
+      const nameKey = normalizeName(cleanName);
       if (authMode === 'register') {
-        if (existing) {
+        const userDocId = `teacher_${normalizeName(cleanEmail)}`;
+        if (local.users[userDocId]) {
           const err = new Error('Email already registered');
           err.code = 'auth/email-already-in-use';
           throw err;
         }
+        const passHash = simpleHash(`${cleanEmail}:${password}`);
         local.users[userDocId] = { ...freshUserDoc(cleanName, 'teacher', 'local'), email: cleanEmail, passHash };
-      } else {
-        if (!existing || (existing.passHash && existing.passHash !== passHash)) {
-          const err = new Error('Invalid email or password');
-          err.code = 'auth/invalid-credential';
-          throw err;
-        }
-        if (String(username || '').trim()) existing.username = cleanName;
-        existing.updatedAt = Date.now();
+        cacheTeacherEmail(nameKey, cleanEmail);
+        const sess = { userDocId, username: cleanName, role: 'teacher', email: cleanEmail };
+        activeSession = sess;
+        writeJson(SESSION_KEY, sess);
+        setLocalDb(local);
+        return { session: sess, user: { id: userDocId, ...local.users[userDocId] }, isNew: true };
       }
-      const finalName = local.users[userDocId].username;
-      const sess = { userDocId, username: finalName, role: 'teacher', email: cleanEmail };
+      // Local Teacher Sign In by Name (or email) + Password
+      const matchEntry = Object.entries(local.users).find(([, u]) =>
+        u.role === 'teacher' &&
+        (normalizeName(u.username || '') === nameKey || (u.email || '').toLowerCase() === cleanEmail)
+      );
+      if (!matchEntry) {
+        const err = new Error('TEACHER_NOT_FOUND');
+        err.code = 'ad101/teacher-not-found';
+        throw err;
+      }
+      const [userDocId, existing] = matchEntry;
+      const passHash = simpleHash(`${existing.email}:${password}`);
+      if (existing.passHash && existing.passHash !== passHash) {
+        const err = new Error('Invalid password');
+        err.code = 'auth/invalid-credential';
+        throw err;
+      }
+      existing.updatedAt = Date.now();
+      cacheTeacherEmail(normalizeName(existing.username), existing.email);
+      const sess = { userDocId, username: existing.username, role: 'teacher', email: existing.email };
       activeSession = sess;
       writeJson(SESSION_KEY, sess);
       setLocalDb(local);
-      return { session: sess, user: { id: userDocId, ...local.users[userDocId] }, isNew: authMode === 'register' };
+      return { session: sess, user: { id: userDocId, ...existing }, isNew: false };
     }
 
     const userDocId = makeUserDocId('student', cleanName);

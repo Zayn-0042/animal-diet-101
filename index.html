@@ -99,17 +99,22 @@
               <button type="button" class="chip" data-teacher-mode="signin" aria-pressed="true" data-i18n="loginTeacherSignInTab">Teacher Sign In</button>
               <button type="button" class="chip" data-teacher-mode="register" aria-pressed="false" data-i18n="loginTeacherRegTab">Register Teacher</button>
             </div>
-            <div class="form-row">
-              <div class="field">
+            <div class="teacher-auth-fields" id="teacher-auth-fields">
+              <div class="field" id="teacher-email-field" hidden>
                 <label for="login-email" data-i18n="loginEmailLabel">Teacher email</label>
                 <input id="login-email" name="email" type="email" maxlength="120" autocomplete="email" placeholder="e.g., cikgu.aminah@school.edu.my">
               </div>
               <div class="field">
                 <label for="login-password" data-i18n="loginPassLabel">Password</label>
-                <input id="login-password" name="password" type="password" minlength="6" maxlength="100" autocomplete="current-password" placeholder="At least 6 characters">
+                <div class="pass-wrap">
+                  <input id="login-password" name="password" type="password" minlength="6" maxlength="100" autocomplete="current-password" placeholder="At least 6 characters">
+                  <button type="button" class="pass-toggle" id="toggle-password" aria-pressed="false" aria-label="Show password">
+                    <span aria-hidden="true">👁️</span>
+                  </button>
+                </div>
               </div>
             </div>
-            <p class="field-hint teacher-notice" data-i18n="loginTeacherNotice"></p>
+            <p class="field-hint teacher-notice" id="teacher-auth-notice" data-i18n="loginTeacherSignInHint"></p>
           </div>
 
           <p class="form-error" id="login-error" role="alert" hidden></p>

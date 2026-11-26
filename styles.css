@@ -902,12 +902,18 @@ dialog h2 { font-size: 1.1rem; margin-top: 1.2rem; color: var(--muted); text-tra
   padding: .85rem .9rem;
   border-bottom: 3px solid var(--ink);
   white-space: nowrap;
+  text-align: center;
 }
+.lb-table thead th:nth-child(2) { text-align: start; }
 .lb-table tbody th, .lb-table tbody td {
   padding: .8rem .9rem;
   border-bottom: 1.5px solid var(--line);
   background: var(--card);
   white-space: nowrap;
+}
+.lb-table tbody td {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 .lb-table tbody th {
   position: sticky; inset-inline-start: 0; z-index: 1;
@@ -991,6 +997,19 @@ dialog h2 { font-size: 1.1rem; margin-top: 1.2rem; color: var(--muted); text-tra
 .auth-mode-tabs { display: flex; gap: .45rem; flex-wrap: wrap; margin-bottom: .85rem; }
 .auth-mode-tabs .chip { padding: .35rem .85rem; font-size: .88rem; }
 .teacher-notice { color: #5b21b6; font-weight: 700; }
+.pass-wrap { position: relative; display: flex; align-items: center; }
+.pass-wrap input { width: 100%; padding-inline-end: 3rem; }
+.pass-toggle {
+  position: absolute; inset-inline-end: .4rem;
+  width: 2.25rem; height: 2.25rem; border-radius: 12px;
+  border: 2px solid transparent; background: transparent;
+  font-size: 1.15rem; cursor: pointer; display: grid; place-items: center;
+  transition: background-color .15s, border-color .15s;
+}
+.pass-toggle:hover { background: var(--primary); border-color: var(--ink); }
+.teacher-auth-fields { display: grid; grid-template-columns: 1fr; gap: .75rem; }
+.teacher-auth-fields.two-col { grid-template-columns: repeat(2, 1fr); }
+@media (width < 560px) { .teacher-auth-fields.two-col { grid-template-columns: 1fr; } }
 
 /* ───── Text-to-Speech (TTS) & Video Dubbing Controls ───── */
 .tts-inline { display: flex; flex-wrap: wrap; gap: .4rem; justify-content: center; margin-top: .45rem; }
