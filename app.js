@@ -1581,6 +1581,7 @@
 
   $('#ai-fab').addEventListener('click', () => {
     aiChat = [];
+    AI.resetContext?.();
     renderAiChrome();
     aiDialog.showModal();
     sfx('pop');

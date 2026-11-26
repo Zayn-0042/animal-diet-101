@@ -24,6 +24,10 @@ window.DIET_DATA = (() => {
     },
   };
 
+  // Inline SVG icons for Unicode 13.0 foods (seal, worm) so they never show as □ on Windows 10 / older OSes
+  const SEAL_SVG = '<svg class="food-svg" viewBox="0 0 64 64" aria-hidden="true"><path d="M12 46c0-14 9-26 22-26 11 0 18 7 18 18 0 6-3 10-7 12l5 4c1 1 0 3-2 3H16c-3 0-4-5-4-11Z" fill="#9fb3c8" stroke="#2b2a33" stroke-width="3.5" stroke-linejoin="round"/><ellipse cx="30" cy="36" rx="11" ry="8" fill="#cbd5e1"/><circle cx="24" cy="29" r="2.8" fill="#2b2a33"/><circle cx="35" cy="29" r="2.8" fill="#2b2a33"/><ellipse cx="29.5" cy="34" rx="4" ry="2.8" fill="#2b2a33"/><path d="M29.5 36.8v2.7m-4 .5c2 1.8 6 1.8 8 0" fill="none" stroke="#2b2a33" stroke-width="2.5" stroke-linecap="round"/><path d="M16 35l7 1m-7 4l7-1m19-3l7-1m-7 4l7 1" stroke="#2b2a33" stroke-width="2.2" stroke-linecap="round"/><path d="M12 47c-4 1-6 4-5 7 3 2 8 0 11-3" fill="#7c93ad" stroke="#2b2a33" stroke-width="3" stroke-linejoin="round"/></svg>';
+  const WORM_SVG = '<svg class="food-svg" viewBox="0 0 64 64" aria-hidden="true"><path d="M12 44c0-10 8-14 14-10s8 12 16 10c7-2 10-12 8-20-1-5-7-6-10-3" fill="none" stroke="#2b2a33" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 44c0-10 8-14 14-10s8 12 16 10c7-2 10-12 8-20-1-5-7-6-10-3" fill="none" stroke="#f28b9c" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 33l-2 7m10 3l3-6m11-5l6 2" stroke="#d96b7e" stroke-width="2.2" stroke-linecap="round"/><circle cx="42.5" cy="19.5" r="1.8" fill="#2b2a33"/><circle cx="47" cy="21" r="1.8" fill="#2b2a33"/></svg>';
+
   // type: plant | animal | other (other is never used as a wrong answer)
   const FOODS = {
     grass: { e: '🌾', n: 'Grass', type: 'plant' },
@@ -42,10 +46,10 @@ window.DIET_DATA = (() => {
     shrimp: { e: '🦐', n: 'Shrimp & krill', type: 'animal' },
     squid: { e: '🦑', n: 'Squid', type: 'animal' },
     insects: { e: '🦗', n: 'Insects', type: 'animal' },
-    worms: { e: '🪱', n: 'Worms', type: 'animal' },
+    worms: { e: WORM_SVG, n: 'Worms', type: 'animal' },
     mice: { e: '🐁', n: 'Mice', type: 'animal' },
     eggs: { e: '🥚', n: 'Eggs', type: 'animal' },
-    seals: { e: '🦭', n: 'Seals', type: 'animal' },
+    seals: { e: SEAL_SVG, n: 'Seals', type: 'animal' },
     zebra: { e: '🦓', n: 'Zebras', type: 'animal' },
     deer: { e: '🦌', n: 'Deer', type: 'animal' },
     rabbits: { e: '🐇', n: 'Rabbits', type: 'animal' },
