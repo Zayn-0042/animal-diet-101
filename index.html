@@ -4,34 +4,124 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Animal Diet 101 — Who eats what?</title>
-  <meta name="description" content="Animal Diet 101: learn what animals eat — herbivores, carnivores and omnivores — and play fun sorting, feeding and quiz games.">
+  <meta name="description" content="Animal Diet 101: bilingual (EN/BM) animal diet web game with student leaderboards, teacher dashboard, video quiz, and Firebase Firestore sync.">
   <meta name="theme-color" content="#ffc53d">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦁</text></svg>">
   <link rel="stylesheet" href="styles.css">
+  <script src="firebase-config.js" defer></script>
   <script src="data.js" defer></script>
+  <script src="i18n.js" defer></script>
+  <script src="db.js" defer></script>
+  <script src="ai-assistant.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="#home" aria-label="Animal Diet 101 — home">
+    <a class="brand" id="brand-link" href="#login" aria-label="Animal Diet 101">
       <span class="brand-emoji" aria-hidden="true">🦁</span>
       <span class="brand-text">Animal Diet <b>101</b></span>
     </a>
-    <nav class="topnav" aria-label="Game sections">
-      <a href="#learn" data-nav="learn"><span aria-hidden="true">📖</span> Learn</a>
-      <a href="#sort" data-nav="sort"><span aria-hidden="true">🧺</span> Sort It!</a>
-      <a href="#feed" data-nav="feed"><span aria-hidden="true">🍽️</span> Feed Me!</a>
-      <a href="#quiz" data-nav="quiz"><span aria-hidden="true">🧠</span> Quiz</a>
-      <a href="#notes" data-nav="notes"><span aria-hidden="true">📝</span> Notes</a>
+
+    <!-- Student Navigation -->
+    <nav class="topnav" id="nav-student" aria-label="Student sections" hidden>
+      <a href="#learn" data-nav="learn"><span aria-hidden="true">📖</span> <span data-i18n="navLearn">Learn</span></a>
+      <a href="#sort" data-nav="sort"><span aria-hidden="true">🧺</span> <span data-i18n="navSort">Sort It!</span></a>
+      <a href="#feed" data-nav="feed"><span aria-hidden="true">🍽️</span> <span data-i18n="navFeed">Feed Me!</span></a>
+      <a href="#quiz" data-nav="quiz"><span aria-hidden="true">🧠</span> <span data-i18n="navQuiz">Quiz</span></a>
+      <a href="#notes" data-nav="notes"><span aria-hidden="true">📝</span> <span data-i18n="navNotes">Notes</span></a>
+      <a href="#profile" data-nav="profile"><span aria-hidden="true">🏅</span> <span data-i18n="navProfile">Profile</span></a>
     </nav>
-    <button id="sound-toggle" class="icon-btn" type="button" aria-pressed="true" aria-label="Sound effects">
-      <span aria-hidden="true">🔊</span>
-    </button>
+
+    <!-- Teacher Navigation -->
+    <nav class="topnav" id="nav-teacher" aria-label="Teacher sections" hidden>
+      <a href="#teacher-home" data-nav="teacher-home"><span aria-hidden="true">📊</span> <span data-i18n="navTDash">Dashboard</span></a>
+      <a href="#teacher-leaderboard" data-nav="teacher-leaderboard"><span aria-hidden="true">🏆</span> <span data-i18n="navTLeader">Leaderboard</span></a>
+      <a href="#teacher-quiz" data-nav="teacher-quiz"><span aria-hidden="true">🧠</span> <span data-i18n="navTQuiz">Manage Quiz</span></a>
+      <a href="#teacher-notes" data-nav="teacher-notes"><span aria-hidden="true">📝</span> <span data-i18n="navTNotes">Manage Notes</span></a>
+    </nav>
+
+    <div class="top-controls">
+      <div class="lang-switch" role="group" aria-label="Switch language" id="lang-switch">
+        <button type="button" data-lang="en" aria-pressed="true">EN</button>
+        <button type="button" data-lang="ms" aria-pressed="false">BM</button>
+      </div>
+      <div class="user-bar" id="user-bar" hidden>
+        <span class="user-pill" id="user-pill"></span>
+        <button type="button" class="btn-mini" id="logout-btn" data-i18n="logout">Log out</button>
+      </div>
+      <button id="sound-toggle" class="icon-btn" type="button" aria-pressed="true" aria-label="Sound effects">
+        <span aria-hidden="true">🔊</span>
+      </button>
+    </div>
   </header>
 
   <main id="main">
-    <!-- ═════════════ HOME ═════════════ -->
-    <section class="screen" data-screen="home" aria-labelledby="home-title">
+    <!-- ═════════════ LOGIN / REGISTRATION ═════════════ -->
+    <section class="screen" data-screen="login" aria-labelledby="login-title">
+      <div class="login-card">
+        <div class="login-art" aria-hidden="true">
+          <span>🦁</span><span>🐘</span><span>🐻</span><span>🐼</span><span>🦋</span>
+        </div>
+        <p class="eyebrow" data-i18n="loginEyebrow">Welcome to Animal Diet 101</p>
+        <h1 id="login-title" tabindex="-1" data-i18n="loginTitle">Sign in or Register</h1>
+        <p class="lead login-sub" data-i18n="loginSubtitle">Enter your name and choose whether you are a Student or Teacher to get started.</p>
+
+        <form id="login-form" novalidate>
+          <div class="field">
+            <label for="login-username" data-i18n="loginNameLabel">Your name</label>
+            <input id="login-username" name="username" type="text" required minlength="2" maxlength="40" autocomplete="username" placeholder="e.g., Aina, Daniel, Cikgu Aminah">
+          </div>
+
+          <fieldset class="role-fieldset">
+            <legend data-i18n="loginRoleLegend">Choose your role</legend>
+            <div class="role-grid">
+              <label class="role-option">
+                <input type="radio" name="role" value="student" checked>
+                <span class="role-box">
+                  <span class="role-emoji" aria-hidden="true">🎓</span>
+                  <strong data-i18n="loginStudentTitle">Student</strong>
+                  <small data-i18n="loginStudentDesc">Learn animals, play games, take video quizzes, keep notes &amp; climb the leaderboard.</small>
+                </span>
+              </label>
+              <label class="role-option">
+                <input type="radio" name="role" value="teacher">
+                <span class="role-box">
+                  <span class="role-emoji" aria-hidden="true">👩‍🏫</span>
+                  <strong data-i18n="loginTeacherTitle">Teacher</strong>
+                  <small data-i18n="loginTeacherDesc">Requires teacher email &amp; password. View students, leaderboard, manage quizzes &amp; class notes.</small>
+                </span>
+              </label>
+            </div>
+          </fieldset>
+
+          <div class="teacher-auth-box" id="teacher-auth-box" hidden>
+            <div class="auth-mode-tabs" role="group" aria-label="Teacher sign in or register">
+              <button type="button" class="chip" data-teacher-mode="signin" aria-pressed="true" data-i18n="loginTeacherSignInTab">Teacher Sign In</button>
+              <button type="button" class="chip" data-teacher-mode="register" aria-pressed="false" data-i18n="loginTeacherRegTab">Register Teacher</button>
+            </div>
+            <div class="form-row">
+              <div class="field">
+                <label for="login-email" data-i18n="loginEmailLabel">Teacher email</label>
+                <input id="login-email" name="email" type="email" maxlength="120" autocomplete="email" placeholder="e.g., cikgu.aminah@school.edu.my">
+              </div>
+              <div class="field">
+                <label for="login-password" data-i18n="loginPassLabel">Password</label>
+                <input id="login-password" name="password" type="password" minlength="6" maxlength="100" autocomplete="current-password" placeholder="At least 6 characters">
+              </div>
+            </div>
+            <p class="field-hint teacher-notice" data-i18n="loginTeacherNotice"></p>
+          </div>
+
+          <p class="form-error" id="login-error" role="alert" hidden></p>
+          <button type="submit" class="btn btn-primary btn-big login-submit" data-i18n="loginBtn">Enter Animal Diet 101 ➜</button>
+        </form>
+
+        <p class="db-hint" id="login-db-hint"></p>
+      </div>
+    </section>
+
+    <!-- ═════════════ STUDENT: HOME ═════════════ -->
+    <section class="screen" data-screen="home" aria-labelledby="home-title" hidden>
       <div class="hero">
         <div class="hero-ambient" aria-hidden="true">
           <span class="orb orb-sun">☀️</span>
@@ -40,13 +130,13 @@
           <span class="orb orb-cloud">☁️</span>
         </div>
         <div class="hero-text">
-          <p class="eyebrow">Learn · Play · Munch</p>
+          <p class="eyebrow" data-i18n="heroEyebrow">Learn · Play · Munch</p>
           <h1 id="home-title" tabindex="-1">Animal Diet <span class="hl">101</span></h1>
-          <p class="lead">Who eats what in the wild? Meet <b id="animal-total">48</b> animals, watch quiz video clues, keep study notes, and play three fun games!</p>
+          <p class="lead" id="hero-lead"></p>
           <div class="hero-actions">
-            <a class="btn btn-primary" href="#sort">▶ Play Sort It!</a>
-            <a class="btn btn-ghost" href="#quiz">🎬 Video Quiz</a>
-            <a class="btn btn-ghost" href="#notes">📝 Study Notes</a>
+            <a class="btn btn-primary" href="#sort" data-i18n="heroBtnSort">▶ Play Sort It!</a>
+            <a class="btn btn-ghost" href="#quiz" data-i18n="heroBtnQuiz">🎬 Video Quiz</a>
+            <a class="btn btn-ghost" href="#profile" data-i18n="heroBtnProfile">🏅 My Profile &amp; Rank</a>
           </div>
         </div>
         <div class="hero-art" aria-hidden="true">
@@ -56,117 +146,104 @@
 
       <div class="parade-bar">
         <div class="parade-viewport" aria-hidden="true">
-          <div class="parade-track">
-            <div class="parade-group">
-              <span class="p-item p-herb">🐘 🌿 Grass &amp; Fruit</span>
-              <span class="p-item p-carn">🦁 🥩 Savanna Meat</span>
-              <span class="p-item p-omni">🐻 🍓🐟 Berries &amp; Salmon</span>
-              <span class="p-item p-herb">🐼 🎋 Fresh Bamboo</span>
-              <span class="p-item p-carn">🐧 🐟 Ocean Fish</span>
-              <span class="p-item p-herb">🦋 🌸 Sweet Nectar</span>
-              <span class="p-item p-omni">🦝 🍎🥚 Forest Snacks</span>
-            </div>
-            <div class="parade-group">
-              <span class="p-item p-herb">🐘 🌿 Grass &amp; Fruit</span>
-              <span class="p-item p-carn">🦁 🥩 Savanna Meat</span>
-              <span class="p-item p-omni">🐻 🍓🐟 Berries &amp; Salmon</span>
-              <span class="p-item p-herb">🐼 🎋 Fresh Bamboo</span>
-              <span class="p-item p-carn">🐧 🐟 Ocean Fish</span>
-              <span class="p-item p-herb">🦋 🌸 Sweet Nectar</span>
-              <span class="p-item p-omni">🦝 🍎🥚 Forest Snacks</span>
-            </div>
-          </div>
+          <div class="parade-track" id="parade-track"></div>
         </div>
         <button type="button" class="motion-btn" id="motion-toggle">⏸ Pause animations</button>
       </div>
 
-      <h2 class="section-title">The 3 big diets</h2>
+      <h2 class="section-title" data-i18n="sectionDiets">The 3 big diets</h2>
       <div class="diet-cards" id="diet-cards"></div>
 
-      <h2 class="section-title">Choose a game</h2>
+      <h2 class="section-title" data-i18n="sectionGames">Choose an activity</h2>
       <div class="mode-grid">
         <a class="mode-card mode-learn" href="#learn">
           <span class="mode-emoji" aria-hidden="true">📖</span>
-          <span class="mode-name">Animal Encyclopedia</span>
-          <span class="mode-desc">Tap animals to see their menu and fun facts.</span>
+          <span class="mode-name" data-i18n="modeLearnName">Animal Encyclopedia</span>
+          <span class="mode-desc" data-i18n="modeLearnDesc">Tap animals to see their menu and fun facts.</span>
           <span class="mode-best" id="best-learn"></span>
         </a>
         <a class="mode-card mode-sort" href="#sort">
           <span class="mode-emoji" aria-hidden="true">🧺</span>
-          <span class="mode-name">Sort It!</span>
-          <span class="mode-desc">Race the clock: drop each animal in the right diet bin.</span>
+          <span class="mode-name" data-i18n="modeSortName">Sort It!</span>
+          <span class="mode-desc" data-i18n="modeSortDesc">Race the clock: drop each animal in the right diet bin.</span>
           <span class="mode-best" id="best-sort"></span>
         </a>
         <a class="mode-card mode-feed" href="#feed">
           <span class="mode-emoji" aria-hidden="true">🍽️</span>
-          <span class="mode-name">Feed Me!</span>
-          <span class="mode-desc">Give each hungry animal the snack it would really eat.</span>
+          <span class="mode-name" data-i18n="modeFeedName">Feed Me!</span>
+          <span class="mode-desc" data-i18n="modeFeedDesc">Give each hungry animal the snack it would really eat.</span>
           <span class="mode-best" id="best-feed"></span>
         </a>
         <a class="mode-card mode-quiz" href="#quiz">
           <span class="mode-emoji" aria-hidden="true">🧠</span>
-          <span class="mode-name">Video Diet Quiz</span>
-          <span class="mode-desc">10 video-backed questions about teeth, tummies and food chains.</span>
+          <span class="mode-name" data-i18n="modeQuizName">Video Diet Quiz</span>
+          <span class="mode-desc" data-i18n="modeQuizDesc">Video-backed questions about teeth, tummies and food chains.</span>
           <span class="mode-best" id="best-quiz"></span>
         </a>
         <a class="mode-card mode-notes" href="#notes">
           <span class="mode-emoji" aria-hidden="true">📝</span>
-          <span class="mode-name">Study Notes</span>
-          <span class="mode-desc">Review key diet cheat sheets and write your own field notes.</span>
+          <span class="mode-name" data-i18n="modeNotesName">Study Notes</span>
+          <span class="mode-desc" data-i18n="modeNotesDesc">Read teacher notes, cheat sheets and write field notes.</span>
           <span class="mode-best" id="best-notes"></span>
+        </a>
+        <a class="mode-card mode-profile" href="#profile">
+          <span class="mode-emoji" aria-hidden="true">🏅</span>
+          <span class="mode-name" data-i18n="modeProfileName">My Profile &amp; Rank</span>
+          <span class="mode-desc" data-i18n="modeProfileDesc">See your scores, trophies and position in the leaderboard.</span>
+          <span class="mode-best" id="best-rank"></span>
         </a>
       </div>
 
-      <h2 class="section-title">Your trophy shelf</h2>
+      <h2 class="section-title" data-i18n="sectionTrophies">Your trophy shelf</h2>
       <ul class="badges" id="badges"></ul>
     </section>
 
-    <!-- ═════════════ LEARN ═════════════ -->
+    <!-- ═════════════ STUDENT: LEARN ═════════════ -->
     <section class="screen" data-screen="learn" aria-labelledby="learn-title" hidden>
       <div class="screen-head">
-        <h1 id="learn-title" tabindex="-1">📖 Animal Encyclopedia</h1>
-        <p>Tap an animal to see what it eats. <span class="pill" id="seen-count"></span></p>
+        <h1 id="learn-title" tabindex="-1" data-i18n="learnTitle">📖 Animal Encyclopedia</h1>
+        <p><span data-i18n="learnSub">Tap an animal to see what it eats.</span> <span class="pill" id="seen-count"></span></p>
       </div>
 
       <details class="dictionary">
-        <summary>📚 Diet dictionary — fancy food words</summary>
+        <summary data-i18n="dictSummary">📚 Diet dictionary — fancy food words</summary>
         <dl id="dictionary"></dl>
       </details>
 
       <div class="toolbar">
         <div class="filters" role="group" aria-label="Filter by diet">
-          <button type="button" class="chip" data-filter="all" aria-pressed="true">All</button>
-          <button type="button" class="chip chip-herbivore" data-filter="herbivore" aria-pressed="false">🌿 Herbivores</button>
-          <button type="button" class="chip chip-carnivore" data-filter="carnivore" aria-pressed="false">🥩 Carnivores</button>
-          <button type="button" class="chip chip-omnivore" data-filter="omnivore" aria-pressed="false">🍽️ Omnivores</button>
+          <button type="button" class="chip" data-filter="all" aria-pressed="true" data-i18n="filterAll">All</button>
+          <button type="button" class="chip chip-herbivore" data-filter="herbivore" aria-pressed="false" data-i18n="filterHerb">🌿 Herbivores</button>
+          <button type="button" class="chip chip-carnivore" data-filter="carnivore" aria-pressed="false" data-i18n="filterCarn">🥩 Carnivores</button>
+          <button type="button" class="chip chip-omnivore" data-filter="omnivore" aria-pressed="false" data-i18n="filterOmni">🍽️ Omnivores</button>
         </div>
         <label class="search">
-          <span class="visually-hidden">Search animals</span>
+          <span class="visually-hidden" data-i18n="searchLabel">Search animals</span>
           <input type="search" id="search" placeholder="🔎 Search animals…" autocomplete="off">
         </label>
       </div>
 
       <ul class="animal-grid" id="animal-grid"></ul>
-      <p class="empty" id="no-results" hidden>No animals found. Try another name!</p>
+      <p class="empty" id="no-results" hidden data-i18n="noAnimals">No animals found. Try another name!</p>
     </section>
 
-    <!-- ═════════════ SORT IT ═════════════ -->
+    <!-- ═════════════ STUDENT: SORT IT ═════════════ -->
     <section class="screen" data-screen="sort" aria-labelledby="sort-title" hidden>
       <div class="screen-head">
-        <h1 id="sort-title" tabindex="-1">🧺 Sort It!</h1>
-        <p>Drag each animal into the correct diet bin — or just tap a bin. Keyboard: press <kbd>1</kbd>, <kbd>2</kbd> or <kbd>3</kbd>.</p>
+        <h1 id="sort-title" tabindex="-1" data-i18n="sortTitle">🧺 Sort It!</h1>
+        <p data-i18n="sortSub">Drag each animal into the correct diet bin — or just tap a bin. Keyboard: press 1, 2 or 3.</p>
       </div>
 
       <div class="start-panel" id="sort-start">
         <div class="start-emoji" aria-hidden="true">⏱️</div>
-        <p>You have <b>60 seconds</b>. Each correct answer is worth 10 points, and streaks earn bonus points!</p>
-        <button type="button" class="btn btn-primary btn-big" data-start="sort">Start sorting</button>
+        <p id="sort-start-desc"></p>
+        <button type="button" class="btn btn-primary btn-big" data-start="sort" data-i18n="sortStartBtn">Start sorting</button>
       </div>
 
       <div class="game" id="sort-game" hidden>
         <div class="hud">
-          <span>⭐ Score <b id="sort-score">0</b></span>
-          <span>🔥 Streak <b id="sort-streak">0</b></span>
+          <span><span data-i18n="hudScore">⭐ Score</span> <b id="sort-score">0</b></span>
+          <span><span data-i18n="hudStreak">🔥 Streak</span> <b id="sort-streak">0</b></span>
           <span>⏱️ <b id="sort-time">60</b>s</span>
         </div>
         <div class="timebar" aria-hidden="true"><div id="sort-timebar"></div></div>
@@ -175,7 +252,11 @@
           <div class="drag-card" id="sort-card">
             <span class="big-emoji" id="sort-emoji" aria-hidden="true"></span>
             <span class="card-name" id="sort-name"></span>
-            <span class="drag-hint" aria-hidden="true">drag me ✋</span>
+            <div class="tts-inline">
+              <button type="button" class="tts-pill" id="sort-speak-btn" data-i18n="ttsListen">🔊 Listen</button>
+              <button type="button" class="tts-pill" id="sort-spell-btn" data-i18n="ttsSpell">🔤 Spell</button>
+            </div>
+            <span class="drag-hint" aria-hidden="true" data-i18n="dragHint">drag me ✋</span>
           </div>
           <p class="feedback" id="sort-feedback" aria-live="polite"></p>
         </div>
@@ -183,49 +264,53 @@
         <div class="bins">
           <button type="button" class="bin bin-herbivore" data-diet="herbivore">
             <span class="bin-emoji" aria-hidden="true">🌿</span>
-            <span class="bin-label">Herbivore</span>
-            <span class="bin-sub">plants only</span>
+            <span class="bin-label" id="bin-label-herbivore">Herbivore</span>
+            <span class="bin-sub" data-i18n="binHerbSub">plants only</span>
             <kbd aria-hidden="true">1</kbd>
           </button>
           <button type="button" class="bin bin-carnivore" data-diet="carnivore">
             <span class="bin-emoji" aria-hidden="true">🥩</span>
-            <span class="bin-label">Carnivore</span>
-            <span class="bin-sub">meat eater</span>
+            <span class="bin-label" id="bin-label-carnivore">Carnivore</span>
+            <span class="bin-sub" data-i18n="binCarnSub">meat eater</span>
             <kbd aria-hidden="true">2</kbd>
           </button>
           <button type="button" class="bin bin-omnivore" data-diet="omnivore">
             <span class="bin-emoji" aria-hidden="true">🍽️</span>
-            <span class="bin-label">Omnivore</span>
-            <span class="bin-sub">eats both</span>
+            <span class="bin-label" id="bin-label-omnivore">Omnivore</span>
+            <span class="bin-sub" data-i18n="binOmniSub">eats both</span>
             <kbd aria-hidden="true">3</kbd>
           </button>
         </div>
       </div>
     </section>
 
-    <!-- ═════════════ FEED ME ═════════════ -->
+    <!-- ═════════════ STUDENT: FEED ME ═════════════ -->
     <section class="screen" data-screen="feed" aria-labelledby="feed-title" hidden>
       <div class="screen-head">
-        <h1 id="feed-title" tabindex="-1">🍽️ Feed Me!</h1>
-        <p>Each animal is hungry. Pick the food it would really eat in the wild.</p>
+        <h1 id="feed-title" tabindex="-1" data-i18n="feedTitle">🍽️ Feed Me!</h1>
+        <p data-i18n="feedSub">Each animal is hungry. Pick the food it would really eat in the wild.</p>
       </div>
 
       <div class="start-panel" id="feed-start">
         <div class="start-emoji" aria-hidden="true">😋</div>
-        <p><b>10 hungry animals</b> are waiting. Can you feed them all correctly?</p>
-        <button type="button" class="btn btn-primary btn-big" data-start="feed">Start feeding</button>
+        <p id="feed-start-desc"></p>
+        <button type="button" class="btn btn-primary btn-big" data-start="feed" data-i18n="feedStartBtn">Start feeding</button>
       </div>
 
       <div class="game" id="feed-game" hidden>
         <div class="hud">
-          <span>🍽️ Round <b id="feed-round">1</b>/10</span>
-          <span>⭐ Fed <b id="feed-score">0</b></span>
+          <span><span data-i18n="hudRound">🍽️ Round</span> <b id="feed-round">1</b>/10</span>
+          <span><span data-i18n="hudFed">⭐ Fed</span> <b id="feed-score">0</b></span>
         </div>
         <div class="feed-stage">
           <div class="feed-animal">
-            <p class="bubble" id="feed-bubble">I'm hungry!</p>
+            <p class="bubble" id="feed-bubble"></p>
             <span class="big-emoji" id="feed-emoji" aria-hidden="true"></span>
             <h2 class="card-name" id="feed-name"></h2>
+            <div class="tts-inline">
+              <button type="button" class="tts-pill" id="feed-speak-btn" data-i18n="ttsListen">🔊 Listen</button>
+              <button type="button" class="tts-pill" id="feed-spell-btn" data-i18n="ttsSpell">🔤 Spell</button>
+            </div>
           </div>
           <div class="food-grid" id="food-grid" role="group" aria-label="Food choices"></div>
         </div>
@@ -236,34 +321,38 @@
       </div>
     </section>
 
-    <!-- ═════════════ QUIZ ═════════════ -->
+    <!-- ═════════════ STUDENT: QUIZ ═════════════ -->
     <section class="screen" data-screen="quiz" aria-labelledby="quiz-title" hidden>
       <div class="screen-head">
-        <h1 id="quiz-title" tabindex="-1">🧠 Video Diet Quiz</h1>
-        <p>Watch each mini-video clue and answer 10 questions about animal diets, teeth and food chains.</p>
+        <h1 id="quiz-title" tabindex="-1" data-i18n="quizTitle">🧠 Video Diet Quiz</h1>
+        <p id="quiz-sub"></p>
       </div>
 
       <div class="start-panel" id="quiz-start">
         <div class="start-emoji" aria-hidden="true">🎬</div>
-        <p>Answer <b>10 video questions</b>. Watch the animated habitat clue, then pick the right answer!</p>
-        <button type="button" class="btn btn-primary btn-big" data-start="quiz">Start quiz</button>
+        <p id="quiz-start-desc"></p>
+        <button type="button" class="btn btn-primary btn-big" data-start="quiz" data-i18n="quizStartBtn">Start quiz</button>
       </div>
 
       <div class="game" id="quiz-game" hidden>
         <div class="hud">
-          <span>❓ Question <b id="quiz-num">1</b>/10</span>
-          <span>⭐ Correct <b id="quiz-score">0</b></span>
+          <span><span data-i18n="hudQuestion">❓ Question</span> <b id="quiz-num">1</b>/<b id="quiz-total-num">10</b></span>
+          <span><span data-i18n="hudCorrect">⭐ Correct</span> <b id="quiz-score">0</b></span>
         </div>
         <div class="quiz-card">
           <figure class="quiz-media">
             <div class="video-frame">
-              <video id="quiz-video" controls muted loop playsinline preload="metadata" aria-describedby="quiz-video-caption">
-                <track id="quiz-track" kind="captions" srclang="en" label="English" default>
-              </video>
+              <video id="quiz-video" controls loop playsinline preload="metadata" aria-describedby="quiz-video-caption"></video>
             </div>
-            <figcaption id="quiz-video-caption" class="video-cap"></figcaption>
+            <div class="video-bar">
+              <figcaption id="quiz-video-caption" class="video-cap"></figcaption>
+              <div class="video-tools">
+                <button type="button" class="tts-pill" id="quiz-dub-toggle">🎙️ Dubbing: ON</button>
+                <button type="button" class="tts-pill" id="quiz-read-btn" data-i18n="ttsReadQ">🔊 Read question</button>
+              </div>
+            </div>
             <details class="video-transcript" id="quiz-transcript-box">
-              <summary>📄 Video description &amp; captions</summary>
+              <summary data-i18n="videoTranscriptSummary">📄 Video description &amp; captions</summary>
               <p id="quiz-transcript-text"></p>
             </details>
           </figure>
@@ -273,80 +362,319 @@
         <div class="explain" id="quiz-explain" hidden>
           <p id="quiz-explain-text"></p>
           <div class="explain-actions">
-            <button type="button" class="btn btn-ghost" id="quiz-save-note">📝 Save to Notes</button>
+            <button type="button" class="btn btn-ghost" id="quiz-save-note" data-i18n="quizSaveNote">📝 Save to Notes</button>
             <button type="button" class="btn btn-primary" id="quiz-next">Next question ➜</button>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ═════════════ NOTES ═════════════ -->
+    <!-- ═════════════ STUDENT: NOTES ═════════════ -->
     <section class="screen" data-screen="notes" aria-labelledby="notes-title" hidden>
       <div class="screen-head">
-        <h1 id="notes-title" tabindex="-1">📝 Study Notes</h1>
-        <p>Quick Animal Diet 101 cheat sheets plus your own personal field notebook, saved on this device.</p>
+        <h1 id="notes-title" tabindex="-1" data-i18n="notesTitle">📝 Study Notes</h1>
+        <p data-i18n="notesSub">Teacher class notes, quick cheat sheets and your own personal field notebook.</p>
       </div>
 
-      <h2 class="section-title notes-subhead">📚 Quick Study Sheet</h2>
+      <h2 class="section-title notes-subhead" data-i18n="teacherNotesHead">👩‍🏫 Teacher Class Notes</h2>
+      <ul class="class-notes-grid" id="student-class-notes"></ul>
+      <p class="empty compact-empty" id="student-class-notes-empty" data-i18n="teacherNotesEmpty">Your teacher hasn’t published any class notes yet.</p>
+
+      <h2 class="section-title" data-i18n="studySheetHead">📚 Quick Study Sheet</h2>
       <div class="study-grid" id="study-notes"></div>
+
+      <h2 class="section-title" data-i18n="extraNotesHead">🌟 Additional Information (Enrichment)</h2>
+      <p class="section-sub" data-i18n="extraNotesSub">Bonus nature facts &amp; special diet words beyond the 3 main primary school syllabus diets.</p>
+      <div class="study-grid extra-grid" id="extra-notes"></div>
 
       <div class="notes-workspace">
         <div class="note-composer">
-          <h2 id="composer-title">✍️ Add a Field Note</h2>
+          <h2 id="composer-title" data-i18n="addFieldNoteHead">✍️ Add a Field Note</h2>
           <form id="note-form">
             <div class="form-row">
               <div class="field">
-                <label for="note-title">Note title</label>
-                <input id="note-title" name="title" type="text" required maxlength="80" placeholder="e.g., Why flamingos turn pink" autocomplete="off">
+                <label for="note-title" data-i18n="noteTitleLabel">Note title</label>
+                <input id="note-title" name="title" type="text" required maxlength="80" autocomplete="off">
               </div>
               <div class="field field-tag">
-                <label for="note-tag">Topic</label>
-                <select id="note-tag" name="tag">
-                  <option value="herbivore">🌿 Herbivore</option>
-                  <option value="carnivore">🥩 Carnivore</option>
-                  <option value="omnivore">🍽️ Omnivore</option>
-                  <option value="foodchain">🔗 Food Chain</option>
-                  <option value="fact">💡 Fun Fact</option>
-                  <option value="general">📝 General</option>
-                </select>
+                <label for="note-tag" data-i18n="noteTopicLabel">Topic</label>
+                <select id="note-tag" name="tag"></select>
               </div>
             </div>
             <div class="field">
-              <label for="note-body">Your note</label>
-              <textarea id="note-body" name="body" required maxlength="1000" placeholder="Write what you learned about an animal's diet, teeth, or food chain…" aria-describedby="note-hint"></textarea>
-              <p class="field-hint" id="note-hint">Saved automatically in your browser. You can also save facts straight from the Encyclopedia or Quiz!</p>
+              <label for="note-body" data-i18n="noteBodyLabel">Your note</label>
+              <textarea id="note-body" name="body" required maxlength="1000" aria-describedby="note-hint"></textarea>
+              <p class="field-hint" id="note-hint" data-i18n="noteHint"></p>
             </div>
             <div class="composer-actions">
-              <button type="submit" class="btn btn-primary" id="note-submit">💾 Save note</button>
-              <button type="button" class="btn btn-ghost" id="note-cancel" hidden>Cancel edit</button>
+              <button type="submit" class="btn btn-primary" id="note-submit" data-i18n="noteSaveBtn">💾 Save note</button>
+              <button type="button" class="btn btn-ghost" id="note-cancel" hidden data-i18n="noteCancelBtn">Cancel edit</button>
             </div>
           </form>
         </div>
 
         <div class="notes-saved">
           <div class="saved-head">
-            <h2 id="saved-notes-title">📒 My Field Notes <span class="pill" id="notes-count">0</span></h2>
-            <button type="button" class="btn btn-ghost btn-sm" id="export-notes">⬇️ Export .txt</button>
+            <h2 id="saved-notes-title"><span data-i18n="myNotesHead">📒 My Field Notes</span> <span class="pill" id="notes-count">0</span></h2>
+            <button type="button" class="btn btn-ghost btn-sm" id="export-notes" data-i18n="exportBtn">⬇️ Export .txt</button>
           </div>
-          <div class="filters note-filters" role="group" aria-label="Filter notes by topic">
-            <button type="button" class="chip" data-note-filter="all" aria-pressed="true">All</button>
-            <button type="button" class="chip chip-herbivore" data-note-filter="herbivore" aria-pressed="false">🌿 Herbivore</button>
-            <button type="button" class="chip chip-carnivore" data-note-filter="carnivore" aria-pressed="false">🥩 Carnivore</button>
-            <button type="button" class="chip chip-omnivore" data-note-filter="omnivore" aria-pressed="false">🍽️ Omnivore</button>
-            <button type="button" class="chip" data-note-filter="foodchain" aria-pressed="false">🔗 Food Chain</button>
-            <button type="button" class="chip" data-note-filter="fact" aria-pressed="false">💡 Fun Fact</button>
-            <button type="button" class="chip" data-note-filter="general" aria-pressed="false">📝 General</button>
-          </div>
+          <div class="filters note-filters" role="group" aria-label="Filter notes by topic" id="student-note-filters"></div>
           <ul class="notes-list" id="notes-list"></ul>
-          <p class="empty" id="notes-empty">No personal notes yet! Write your first note on the left, or tap <b>Save to Notes</b> while exploring animals or playing the quiz.</p>
+          <p class="empty" id="notes-empty"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═════════════ STUDENT: PROFILE & LEADERBOARD ═════════════ -->
+    <section class="screen" data-screen="profile" aria-labelledby="profile-title" hidden>
+      <div class="screen-head">
+        <h1 id="profile-title" tabindex="-1" data-i18n="profileTitle">🏅 Student Profile &amp; Leaderboard</h1>
+        <p data-i18n="profileSub">Track your total score, game bests, trophies and position in the class leaderboard.</p>
+      </div>
+
+      <div class="profile-banner">
+        <div class="profile-id">
+          <span class="profile-avatar" aria-hidden="true">🎓</span>
+          <div>
+            <h2 id="profile-username"></h2>
+            <p class="profile-meta"><span class="pill" id="profile-role-pill"></span> <span class="db-pill" id="profile-db-pill"></span></p>
+          </div>
+        </div>
+        <div class="profile-rank-box">
+          <span class="pr-label" data-i18n="statRank">Leaderboard Rank</span>
+          <strong class="pr-val" id="profile-rank-val">#1</strong>
+        </div>
+      </div>
+
+      <div class="stat-grid" id="profile-stats"></div>
+      <p class="formula-hint" data-i18n="scoreFormulaHint"></p>
+
+      <h2 class="section-title" data-i18n="sectionTrophies">Your trophy shelf</h2>
+      <ul class="badges" id="profile-badges"></ul>
+
+      <h2 class="section-title" data-i18n="leaderboardHead">🏆 Class Leaderboard</h2>
+      <div tabindex="0" role="region" aria-labelledby="student-lb-caption" class="table-wrapper">
+        <table class="lb-table" id="student-lb-table">
+          <caption id="student-lb-caption" class="visually-hidden" data-i18n="lbCaption">Student rankings by total score</caption>
+          <thead>
+            <tr id="student-lb-head"></tr>
+          </thead>
+          <tbody id="student-lb-body"></tbody>
+        </table>
+      </div>
+      <p class="empty" id="student-lb-empty" hidden data-i18n="lbEmpty"></p>
+    </section>
+
+    <!-- ═════════════ TEACHER: DASHBOARD ═════════════ -->
+    <section class="screen" data-screen="teacher-home" aria-labelledby="tdash-title" hidden>
+      <div class="screen-head teacher-head">
+        <div>
+          <h1 id="tdash-title" tabindex="-1" data-i18n="tDashTitle">👩‍🏫 Teacher Dashboard</h1>
+          <p data-i18n="tDashSub">Monitor your class progress, student scores, quiz questions and published study notes.</p>
+        </div>
+        <span class="db-pill" id="teacher-db-pill"></span>
+      </div>
+
+      <div class="stat-grid teacher-stats" id="teacher-stats"></div>
+
+      <div class="teacher-quick-actions">
+        <a class="btn btn-primary" href="#teacher-quiz" data-i18n="tQuickManageQuiz">🧠 Manage Quiz Questions</a>
+        <a class="btn btn-ghost" href="#teacher-notes" data-i18n="tQuickManageNotes">📝 Publish Class Notes</a>
+        <a class="btn btn-ghost" href="#teacher-leaderboard" data-i18n="tLeaderTitle">🏆 Full Class Leaderboard</a>
+      </div>
+
+      <div class="roster-head">
+        <h2 class="section-title" data-i18n="tRosterHead">📋 Student Roster &amp; Scores</h2>
+        <label class="search">
+          <span class="visually-hidden" data-i18n="tSearchStudent">Filter students</span>
+          <input type="search" id="teacher-student-search" autocomplete="off">
+        </label>
+      </div>
+
+      <div tabindex="0" role="region" aria-labelledby="teacher-roster-caption" class="table-wrapper">
+        <table class="lb-table" id="teacher-roster-table">
+          <caption id="teacher-roster-caption" class="visually-hidden" data-i18n="lbCaption">Student rankings by total score</caption>
+          <thead>
+            <tr id="teacher-roster-head"></tr>
+          </thead>
+          <tbody id="teacher-roster-body"></tbody>
+        </table>
+      </div>
+      <p class="empty" id="teacher-roster-empty" hidden data-i18n="lbEmpty"></p>
+    </section>
+
+    <!-- ═════════════ TEACHER: FULL LEADERBOARD ═════════════ -->
+    <section class="screen" data-screen="teacher-leaderboard" aria-labelledby="tleader-title" hidden>
+      <div class="screen-head">
+        <h1 id="tleader-title" tabindex="-1" data-i18n="tLeaderTitle">🏆 Full Class Leaderboard</h1>
+        <p data-i18n="tLeaderSub">Complete ranking of all registered students across every Animal Diet 101 activity.</p>
+      </div>
+
+      <div class="podium" id="teacher-podium"></div>
+
+      <div tabindex="0" role="region" aria-labelledby="teacher-lb-caption" class="table-wrapper">
+        <table class="lb-table" id="teacher-lb-table">
+          <caption id="teacher-lb-caption" class="visually-hidden" data-i18n="lbCaption">Student rankings by total score</caption>
+          <thead>
+            <tr id="teacher-lb-head"></tr>
+          </thead>
+          <tbody id="teacher-lb-body"></tbody>
+        </table>
+      </div>
+      <p class="empty" id="teacher-lb-empty" hidden data-i18n="lbEmpty"></p>
+    </section>
+
+    <!-- ═════════════ TEACHER: MANAGE QUIZ ═════════════ -->
+    <section class="screen" data-screen="teacher-quiz" aria-labelledby="tquiz-title" hidden>
+      <div class="screen-head">
+        <h1 id="tquiz-title" tabindex="-1" data-i18n="tQuizTitle">🧠 Manage Quiz Questions</h1>
+        <p data-i18n="tQuizSub">Create custom bilingual quiz questions with habitat video clues. Students play these automatically in Video Diet Quiz!</p>
+      </div>
+
+      <div class="teacher-workspace">
+        <div class="note-composer">
+          <h2 id="tquiz-form-title" data-i18n="tQuizAddHead">➕ Add Custom Quiz Question</h2>
+          <form id="tquiz-form">
+            <div class="field">
+              <label for="tq-q-en" data-i18n="tqEnLabel">Question (English)</label>
+              <input id="tq-q-en" type="text" required minlength="3" maxlength="240" autocomplete="off">
+            </div>
+            <div class="field">
+              <label for="tq-q-ms" data-i18n="tqMsLabel">Question (Bahasa Melayu — optional)</label>
+              <input id="tq-q-ms" type="text" maxlength="240" autocomplete="off">
+            </div>
+
+            <div class="field">
+              <label for="tq-video" data-i18n="tqVideoLabel">Habitat Video Clue</label>
+              <select id="tq-video"></select>
+            </div>
+
+            <div class="opt-grid">
+              <div class="field">
+                <label for="tq-opt1-en"><span id="lbl-opt1">Option 1</span> <em class="good-hint" data-i18n="tqCorrectHint">(Correct answer)</em></label>
+                <input id="tq-opt1-en" type="text" required maxlength="140" autocomplete="off">
+              </div>
+              <div class="field">
+                <label for="tq-opt2-en" id="lbl-opt2">Option 2</label>
+                <input id="tq-opt2-en" type="text" required maxlength="140" autocomplete="off">
+              </div>
+              <div class="field">
+                <label for="tq-opt3-en" id="lbl-opt3">Option 3</label>
+                <input id="tq-opt3-en" type="text" required maxlength="140" autocomplete="off">
+              </div>
+              <div class="field">
+                <label for="tq-opt4-en" id="lbl-opt4">Option 4</label>
+                <input id="tq-opt4-en" type="text" required maxlength="140" autocomplete="off">
+              </div>
+            </div>
+
+            <details class="bm-optional">
+              <summary>🇲🇾 BM Options (optional / pilihan)</summary>
+              <div class="opt-grid">
+                <div class="field">
+                  <label for="tq-opt1-ms">Pilihan 1 (BM — Betul)</label>
+                  <input id="tq-opt1-ms" type="text" maxlength="140" autocomplete="off">
+                </div>
+                <div class="field">
+                  <label for="tq-opt2-ms">Pilihan 2 (BM)</label>
+                  <input id="tq-opt2-ms" type="text" maxlength="140" autocomplete="off">
+                </div>
+                <div class="field">
+                  <label for="tq-opt3-ms">Pilihan 3 (BM)</label>
+                  <input id="tq-opt3-ms" type="text" maxlength="140" autocomplete="off">
+                </div>
+                <div class="field">
+                  <label for="tq-opt4-ms">Pilihan 4 (BM)</label>
+                  <input id="tq-opt4-ms" type="text" maxlength="140" autocomplete="off">
+                </div>
+              </div>
+            </details>
+
+            <div class="field">
+              <label for="tq-why-en" data-i18n="tqWhyEnLabel">Explanation (English)</label>
+              <textarea id="tq-why-en" maxlength="400"></textarea>
+            </div>
+            <div class="field">
+              <label for="tq-why-ms" data-i18n="tqWhyMsLabel">Explanation (Bahasa Melayu — optional)</label>
+              <textarea id="tq-why-ms" maxlength="400"></textarea>
+            </div>
+
+            <div class="composer-actions">
+              <button type="submit" class="btn btn-primary" id="tq-submit" data-i18n="tqSaveBtn">💾 Save Question</button>
+              <button type="button" class="btn btn-ghost" id="tq-cancel" hidden data-i18n="noteCancelBtn">Cancel edit</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="notes-saved">
+          <div class="saved-head">
+            <h2><span data-i18n="tqCustomListHead">📚 Teacher Custom Questions</span> <span class="pill" id="tquiz-count">0</span></h2>
+          </div>
+          <p class="field-hint" id="tquiz-builtin-info"></p>
+          <ul class="notes-list" id="tquiz-list"></ul>
+          <p class="empty" id="tquiz-empty" data-i18n="tqCustomEmpty"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═════════════ TEACHER: MANAGE NOTES ═════════════ -->
+    <section class="screen" data-screen="teacher-notes" aria-labelledby="tnotes-title" hidden>
+      <div class="screen-head">
+        <h1 id="tnotes-title" tabindex="-1" data-i18n="tNotesTitle">📝 Manage Class Notes</h1>
+        <p data-i18n="tNotesSub">Publish official Animal Diet 101 study notes for all students to read in their Notes section.</p>
+      </div>
+
+      <div class="teacher-workspace">
+        <div class="note-composer">
+          <h2 id="tnotes-form-title" data-i18n="tNotesAddHead">➕ Publish a Class Note</h2>
+          <form id="tnotes-form">
+            <div class="form-row">
+              <div class="field">
+                <label for="tn-title-en" data-i18n="tnTitleEn">Title (English)</label>
+                <input id="tn-title-en" type="text" required maxlength="120" autocomplete="off">
+              </div>
+              <div class="field field-tag">
+                <label for="tn-tag" data-i18n="noteTopicLabel">Topic</label>
+                <select id="tn-tag"></select>
+              </div>
+            </div>
+            <div class="field">
+              <label for="tn-title-ms" data-i18n="tnTitleMs">Title (Bahasa Melayu — optional)</label>
+              <input id="tn-title-ms" type="text" maxlength="120" autocomplete="off">
+            </div>
+            <div class="field">
+              <label for="tn-body-en" data-i18n="tnBodyEn">Note Content (English)</label>
+              <textarea id="tn-body-en" required maxlength="1500"></textarea>
+            </div>
+            <div class="field">
+              <label for="tn-body-ms" data-i18n="tnBodyMs">Note Content (Bahasa Melayu — optional)</label>
+              <textarea id="tn-body-ms" maxlength="1500"></textarea>
+            </div>
+            <label class="check-row">
+              <input type="checkbox" id="tn-pinned">
+              <span data-i18n="tnPinLabel">Pin to top for students</span>
+            </label>
+            <div class="composer-actions">
+              <button type="submit" class="btn btn-primary" id="tn-submit" data-i18n="tnSaveBtn">📢 Publish Note</button>
+              <button type="button" class="btn btn-ghost" id="tn-cancel" hidden data-i18n="noteCancelBtn">Cancel edit</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="notes-saved">
+          <div class="saved-head">
+            <h2><span data-i18n="tnListHead">📢 Published Class Notes</span> <span class="pill" id="tnotes-count">0</span></h2>
+          </div>
+          <ul class="notes-list" id="tnotes-list"></ul>
+          <p class="empty" id="tnotes-empty" data-i18n="tnEmpty"></p>
         </div>
       </div>
     </section>
   </main>
 
   <footer class="footer">
-    <p>Animal Diet 101 · Made for curious minds 🌍 · Progress is saved on this device.</p>
-    <button type="button" class="link-btn" id="reset-progress">Reset progress</button>
+    <p><span data-i18n="footerText">Animal Diet 101 · Made for curious minds 🌍</span> · <span id="footer-db-status"></span></p>
+    <button type="button" class="link-btn" id="reset-progress" hidden data-i18n="resetBtn">Reset my progress</button>
   </footer>
 
   <!-- Animal detail -->
@@ -356,17 +684,58 @@
       <div>
         <h1 id="ad-title"></h1>
         <p class="ad-tags"><span class="diet-badge" id="ad-diet"></span> <span class="tag" id="ad-special"></span></p>
+        <div class="tts-inline ad-tts">
+          <button type="button" class="tts-pill" id="ad-listen-btn" data-i18n="ttsListen">🔊 Listen</button>
+          <button type="button" class="tts-pill" id="ad-spell-btn" data-i18n="ttsSpell">🔤 Spell</button>
+          <button type="button" class="tts-pill" id="ad-read-all-btn" data-i18n="ttsReadAll">🔊 Read aloud</button>
+        </div>
       </div>
     </div>
-    <h2>On the menu</h2>
+    <p class="spelling-box" id="ad-spelling" hidden></p>
+    <h2 data-i18n="dialogMenu">On the menu</h2>
     <ul class="menu-list" id="ad-eats"></ul>
-    <h2>Fun fact</h2>
+    <h2 data-i18n="dialogFact">Fun fact</h2>
     <p class="fact" id="ad-fact"></p>
     <p class="ad-diet-note" id="ad-note"></p>
     <form method="dialog" class="dialog-actions">
-      <button type="button" class="btn btn-ghost" id="ad-save-note">📝 Save to Notes</button>
-      <button class="btn btn-primary" autofocus>Got it!</button>
+      <button type="button" class="btn btn-ghost" id="ad-save-note" data-i18n="dialogSaveNote">📝 Save to Notes</button>
+      <button class="btn btn-primary" autofocus data-i18n="dialogGotIt">Got it!</button>
     </form>
+  </dialog>
+
+  <!-- AI Assistant Launcher & Dialog (Student + Teacher) -->
+  <button type="button" class="ai-fab" id="ai-fab" hidden data-i18n="aiFab">🤖 Ask AI Buddy</button>
+
+  <dialog id="ai-dialog" class="sheet ai-sheet" closedby="any" aria-labelledby="ai-title">
+    <div class="ai-head">
+      <div>
+        <h1 id="ai-title" data-i18n="aiTitle">🤖 Diet Buddy AI</h1>
+        <p class="ai-sub" id="ai-subtitle"></p>
+      </div>
+      <form method="dialog">
+        <button class="icon-btn" aria-label="Close">✕</button>
+      </form>
+    </div>
+
+    <div class="ai-chips" id="ai-chips" role="group" aria-label="Suggested questions"></div>
+
+    <div class="ai-messages" id="ai-messages" aria-live="polite"></div>
+
+    <form id="ai-form" class="ai-form">
+      <label for="ai-input" class="visually-hidden" data-i18n="aiInputLabel">Ask Diet Buddy a question</label>
+      <textarea id="ai-input" rows="1" maxlength="400" placeholder="Ask about any animal, diet, teeth, or spelling…"></textarea>
+      <button type="submit" class="btn btn-primary btn-sm" id="ai-send" data-i18n="aiSend">Send</button>
+    </form>
+
+    <details class="ai-key-box">
+      <summary data-i18n="aiKeySummary">⚙️ Optional: Connect Gemini API Key</summary>
+      <p class="field-hint" data-i18n="aiKeyHint"></p>
+      <div class="ai-key-row">
+        <label for="ai-gemini-key" class="visually-hidden">Gemini API Key</label>
+        <input id="ai-gemini-key" type="password" placeholder="AIza…" autocomplete="off">
+        <button type="button" class="btn btn-ghost btn-sm" id="ai-save-key" data-i18n="aiKeySave">Save key</button>
+      </div>
+    </details>
   </dialog>
 
   <!-- Results -->
@@ -378,18 +747,18 @@
     <p class="rd-best" id="rd-best"></p>
     <p class="rd-badge" id="rd-badge" hidden></p>
     <form method="dialog" class="dialog-actions">
-      <button class="btn btn-ghost" value="home">🏠 Home</button>
-      <button class="btn btn-primary" value="again" autofocus>🔁 Play again</button>
+      <button class="btn btn-ghost" value="home" data-i18n="resultHome">🏠 Home</button>
+      <button class="btn btn-primary" value="again" autofocus data-i18n="resultAgain">🔁 Play again</button>
     </form>
   </dialog>
 
   <!-- Confirm reset -->
   <dialog id="reset-dialog" class="sheet" aria-labelledby="reset-title">
-    <h1 id="reset-title">Reset all progress?</h1>
-    <p>This clears your best scores, trophies, discovered animals and saved notes.</p>
+    <h1 id="reset-title" data-i18n="resetTitle">Reset your progress?</h1>
+    <p data-i18n="resetDesc">This clears your best scores, trophies, discovered animals and personal notes.</p>
     <form method="dialog" class="dialog-actions">
-      <button class="btn btn-ghost" value="cancel" autofocus>Keep my progress</button>
-      <button class="btn btn-danger" value="reset">Reset</button>
+      <button class="btn btn-ghost" value="cancel" autofocus data-i18n="resetKeep">Keep my progress</button>
+      <button class="btn btn-danger" value="reset" data-i18n="resetConfirm">Reset</button>
     </form>
   </dialog>
 

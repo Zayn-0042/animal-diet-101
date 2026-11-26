@@ -1,0 +1,457 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model — Animal Diet 101
+// ===============================================================
+//
+// Authentication:
+//   - Students: Firebase Anonymous Authentication
+//     (request.auth != null; typically sign_in_provider == 'anonymous')
+//     paired with a classroom username + 'student' session.
+//   - Teachers: Firebase Email/Password Authentication REQUIRED
+//     (request.auth.token.firebase.sign_in_provider == 'password' &&
+//      request.auth.token.email is string &&
+//      request.auth.token.email.size() >= 3).
+//     Anonymous users can NEVER assume the 'teacher' role or write to
+//     teacher-managed collections.
+//
+// Collection: sessions
+// Document ID: {uid} (must equal request.auth.uid)
+// Fields (strict schema):
+//   - uid: string (required, immutable, must equal {uid} / request.auth.uid)
+//   - role: string (required, enum: 'student' | 'teacher'; 'teacher' requires Email/Password auth)
+//   - username: string (required, length 2..40)
+//   - userDocId: string (required, length 3..64, no '/' path separators)
+//   - updatedAt: timestamp | int >= 0 (required)
+//
+// Collection: users
+// Document ID: {userDocId} (e.g., 'student_ali', 'teacher_<uid>' or 'teacher_cikgu')
+// Fields (strict schema):
+//   - username: string (required, length 2..40)
+//   - usernameLower: string (required, immutable, length 2..40)
+//   - role: string (required, immutable, enum: 'student' | 'teacher')
+//   - totalScore: int (required, range 0..100000)
+//   - best: map (required, strict keys: sort 0..10000, feed 0..10, quiz 0..100)
+//   - bestStreak: int (required, range 0..500)
+//   - seen: list (required, max size 60)
+//   - badges: list (required, max size 20)
+//   - personalNotes: list (required, max size 200)
+//   - ownerUid: string (required, immutable on teacher profiles, length 1..128)
+//   - updatedAt: timestamp | int >= 0 (required)
+//   - email: string (optional on 'teacher' profiles ONLY, length 0..120, valid email if non-empty;
+//     forbidden on 'student' profiles to prevent PII leakage in leaderboard queries)
+//
+// Privacy / Access Model for users:
+//   - Student profiles (non-PII, no email) are readable/listable via
+//     where('role', '==', 'student') by any authenticated classroom user.
+//   - Teacher profiles (may contain email PII) are strictly private to their
+//     owning Email/Password-authenticated teacher (get only; never listable).
+//
+// Collection: quizQuestions
+// Document ID: {questionId}
+// Fields (strict schema):
+//   - qEn: string (required, length 3..240)
+//   - qMs: string (required, length 3..240)
+//   - aEn: list of 4 strings (required, each string length 1..200)
+//   - aMs: list of 4 strings (required, each string length 1..200)
+//   - whyEn: string (required, length 0..400)
+//   - whyMs: string (required, length 0..400)
+//   - video: string (required, length 1..60)
+//   - active: bool (required)
+//   - createdBy: string (required, length 1..40)
+//   - updatedAt: timestamp | int >= 0 (required)
+//
+// Collection: classNotes
+// Document ID: {noteId}
+// Fields (strict schema):
+//   - titleEn: string (required, length 1..120)
+//   - titleMs: string (required, length 1..120)
+//   - bodyEn: string (required, length 1..1500)
+//   - bodyMs: string (required, length 1..1500)
+//   - tag: string (required, enum: 'herbivore' | 'carnivore' | 'omnivore' | 'foodchain' | 'fact' | 'general')
+//   - pinned: bool (required)
+//   - authorName: string (required, length 1..40)
+//   - updatedAt: timestamp | int >= 0 (required)
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    // Check if the caller is authenticated (Anonymous or Email/Password)
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if the caller signed in with Firebase Email/Password Authentication (required for Teachers)
+    function isEmailAuth() {
+      return isAuthenticated() &&
+             request.auth.token.firebase.sign_in_provider == 'password' &&
+             'email' in request.auth.token &&
+             request.auth.token.email is string &&
+             request.auth.token.email.size() >= 3;
+    }
+
+    // Check if the caller owns the document keyed by their Auth UID
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Verify uid field matches caller on create
+    function uidUnchanged() {
+      return !('uid' in request.resource.data) ||
+             request.resource.data.uid == request.auth.uid;
+    }
+
+    // Ensure uid field cannot be modified on update
+    function uidNotModified() {
+      return !('uid' in request.resource.data) ||
+             request.resource.data.uid == resource.data.uid;
+    }
+
+    // Validate that the document contains only the allowed fields
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // Validate that all required fields exist
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    // Validate that immutable fields have not been changed on update
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // Validate a string value's type and length bounds
+    function isValidString(val, minLen, maxLen) {
+      return val is string &&
+             val.size() >= minLen &&
+             val.size() <= maxLen;
+    }
+
+    // Validate email format
+    function isValidEmail(email) {
+      return email is string &&
+             email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // Validate an integer value's type and inclusive range
+    function isValidIntRange(val, minVal, maxVal) {
+      return val is int &&
+             val >= minVal &&
+             val <= maxVal;
+    }
+
+    // Validate a list type and maximum size bound
+    function isValidList(val, maxSize) {
+      return val is list &&
+             val.size() <= maxSize;
+    }
+
+    // Validate a Firestore timestamp or non-negative integer epoch timestamp
+    function isValidTimestampOrMillis(val) {
+      return val is timestamp || (val is int && val >= 0);
+    }
+
+    // Validate classroom role enum
+    function isValidRole(role) {
+      return role in ['student', 'teacher'];
+    }
+
+    // Enforce that only Email/Password-authenticated users may assume the teacher role
+    function canAssumeRole(role) {
+      return role == 'student' || (role == 'teacher' && isEmailAuth());
+    }
+
+    // Validate study note topic tag enum
+    function isValidNoteTag(tag) {
+      return tag in ['herbivore', 'carnivore', 'omnivore', 'foodchain', 'fact', 'general'];
+    }
+
+    // Validate a single document ID string (no path traversal or slashes)
+    function isValidDocIdString(val, minLen, maxLen) {
+      return isValidString(val, minLen, maxLen) &&
+             val != '.' &&
+             val != '..' &&
+             !val.matches('.*[/].*');
+    }
+
+    // Validate a fixed 4-option quiz answer list and each element's length
+    function isValidAnswerList(arr) {
+      return arr is list &&
+             arr.size() == 4 &&
+             isValidString(arr[0], 1, 200) &&
+             isValidString(arr[1], 1, 200) &&
+             isValidString(arr[2], 1, 200) &&
+             isValidString(arr[3], 1, 200);
+    }
+
+    // ===============================================================
+    // Session Lookup Helpers
+    // ===============================================================
+
+    function sessionExists() {
+      return isAuthenticated() &&
+             exists(/databases/$(database)/documents/sessions/$(request.auth.uid));
+    }
+
+    function getSession() {
+      return get(/databases/$(database)/documents/sessions/$(request.auth.uid)).data;
+    }
+
+    function hasMatchingSession(userDocId, expectedRole) {
+      return sessionExists() &&
+             getSession().userDocId == userDocId &&
+             getSession().role == expectedRole;
+    }
+
+    // Teacher session MUST also be backed by Email/Password authentication
+    function isTeacherSession() {
+      return isEmailAuth() &&
+             sessionExists() &&
+             getSession().role == 'teacher';
+    }
+
+    // ===============================================================
+    // Domain Validators (Called in BOTH create and update rules)
+    // ===============================================================
+
+    function isValidSession(data, uid) {
+      let allowedFields = ['uid', 'role', 'username', 'userDocId', 'updatedAt'];
+      return hasOnlyAllowedFields(allowedFields) &&
+             hasRequiredFields(allowedFields) &&
+             data.uid is string &&
+             data.uid == uid &&
+             isValidRole(data.role) &&
+             canAssumeRole(data.role) &&
+             isValidString(data.username, 2, 40) &&
+             isValidDocIdString(data.userDocId, 3, 64) &&
+             isValidTimestampOrMillis(data.updatedAt);
+    }
+
+    function isValidBestMap(best) {
+      let bestKeys = ['sort', 'feed', 'quiz'];
+      return best is map &&
+             best.keys().hasOnly(bestKeys) &&
+             best.keys().hasAll(bestKeys) &&
+             isValidIntRange(best.sort, 0, 10000) &&
+             isValidIntRange(best.feed, 0, 10) &&
+             isValidIntRange(best.quiz, 0, 100);
+    }
+
+    function isValidUserProfile(data) {
+      let requiredFields = [
+        'username',
+        'usernameLower',
+        'role',
+        'totalScore',
+        'best',
+        'bestStreak',
+        'seen',
+        'badges',
+        'personalNotes',
+        'ownerUid',
+        'updatedAt'
+      ];
+      let allowedFields = [
+        'username',
+        'usernameLower',
+        'role',
+        'totalScore',
+        'best',
+        'bestStreak',
+        'seen',
+        'badges',
+        'personalNotes',
+        'ownerUid',
+        'updatedAt',
+        'email'
+      ];
+      return hasOnlyAllowedFields(allowedFields) &&
+             hasRequiredFields(requiredFields) &&
+             isValidString(data.username, 2, 40) &&
+             isValidString(data.usernameLower, 2, 40) &&
+             isValidRole(data.role) &&
+             (
+               (data.role == 'student' && !('email' in data)) ||
+               (data.role == 'teacher' && (
+                 !('email' in data) ||
+                 (isValidString(data.email, 0, 120) && (data.email == '' || isValidEmail(data.email)))
+               ))
+             ) &&
+             isValidIntRange(data.totalScore, 0, 100000) &&
+             isValidBestMap(data.best) &&
+             isValidIntRange(data.bestStreak, 0, 500) &&
+             isValidList(data.seen, 60) &&
+             isValidList(data.badges, 20) &&
+             isValidList(data.personalNotes, 200) &&
+             isValidString(data.ownerUid, 1, 128) &&
+             isValidTimestampOrMillis(data.updatedAt);
+    }
+
+    function isValidQuizQuestion(data) {
+      let allowedFields = [
+        'qEn',
+        'qMs',
+        'aEn',
+        'aMs',
+        'whyEn',
+        'whyMs',
+        'video',
+        'active',
+        'createdBy',
+        'updatedAt'
+      ];
+      return hasOnlyAllowedFields(allowedFields) &&
+             hasRequiredFields(allowedFields) &&
+             isValidString(data.qEn, 3, 240) &&
+             isValidString(data.qMs, 3, 240) &&
+             isValidAnswerList(data.aEn) &&
+             isValidAnswerList(data.aMs) &&
+             isValidString(data.whyEn, 0, 400) &&
+             isValidString(data.whyMs, 0, 400) &&
+             isValidString(data.video, 1, 60) &&
+             data.active is bool &&
+             isValidString(data.createdBy, 1, 40) &&
+             isValidTimestampOrMillis(data.updatedAt);
+    }
+
+    function isValidClassNote(data) {
+      let allowedFields = [
+        'titleEn',
+        'titleMs',
+        'bodyEn',
+        'bodyMs',
+        'tag',
+        'pinned',
+        'authorName',
+        'updatedAt'
+      ];
+      return hasOnlyAllowedFields(allowedFields) &&
+             hasRequiredFields(allowedFields) &&
+             isValidString(data.titleEn, 1, 120) &&
+             isValidString(data.titleMs, 1, 120) &&
+             isValidString(data.bodyEn, 1, 1500) &&
+             isValidString(data.bodyMs, 1, 1500) &&
+             isValidNoteTag(data.tag) &&
+             data.pinned is bool &&
+             isValidString(data.authorName, 1, 40) &&
+             isValidTimestampOrMillis(data.updatedAt);
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    // 1. Active Browser Sessions (strictly private to the authenticated UID;
+    //    'teacher' sessions strictly require Email/Password authentication)
+    match /sessions/{uid} {
+      allow get: if isOwner(uid);
+      allow list: if false;
+      allow create: if isOwner(uid) &&
+                       uidUnchanged() &&
+                       isValidSession(request.resource.data, uid);
+      allow update: if isOwner(uid) &&
+                       uidNotModified() &&
+                       isValidSession(request.resource.data, uid);
+      allow delete: if isOwner(uid);
+    }
+
+    // 2. Student & Teacher Profiles
+    //    - Student profiles contain no PII and are readable/listable for the leaderboard
+    //      and Teacher Dashboard roster (via where('role', '==', 'student')).
+    //    - Teacher profiles may contain an optional email address and are strictly
+    //      private to their owning Email/Password-authenticated teacher.
+    match /users/{userDocId} {
+      allow get: if isAuthenticated() && (
+        (resource == null && (userDocId.matches('^student_.*') || isEmailAuth())) ||
+        (resource != null && (
+          resource.data.role == 'student' ||
+          (isEmailAuth() && resource.data.ownerUid == request.auth.uid)
+        ))
+      );
+      allow list: if isAuthenticated() &&
+                     resource.data.role == 'student';
+      allow create: if isAuthenticated() &&
+                       isValidUserProfile(request.resource.data) &&
+                       request.resource.data.ownerUid == request.auth.uid &&
+                       hasMatchingSession(userDocId, request.resource.data.role) &&
+                       (
+                         (
+                           request.resource.data.role == 'student' &&
+                           userDocId.matches('^student_.*')
+                         ) ||
+                         (
+                           request.resource.data.role == 'teacher' &&
+                           isEmailAuth() &&
+                           userDocId.matches('^teacher_.*')
+                         )
+                       );
+      allow update: if isAuthenticated() &&
+                       isValidUserProfile(request.resource.data) &&
+                       areImmutableFieldsUnchanged(['role', 'usernameLower']) &&
+                       (
+                         (
+                           resource.data.role == 'teacher' &&
+                           isEmailAuth() &&
+                           resource.data.ownerUid == request.auth.uid &&
+                           request.resource.data.ownerUid == resource.data.ownerUid
+                         ) ||
+                         (
+                           resource.data.role == 'student' &&
+                           (
+                             (
+                               resource.data.ownerUid == request.auth.uid &&
+                               request.resource.data.ownerUid == resource.data.ownerUid
+                             ) ||
+                             (
+                               hasMatchingSession(userDocId, 'student') &&
+                               (
+                                 request.resource.data.ownerUid == resource.data.ownerUid ||
+                                 request.resource.data.ownerUid == request.auth.uid
+                               )
+                             )
+                           )
+                         )
+                       );
+      allow delete: if false;
+    }
+
+    // 3. Teacher-Managed Custom Quiz Questions
+    match /quizQuestions/{questionId} {
+      allow read: if isAuthenticated();
+      allow create: if isEmailAuth() &&
+                       isTeacherSession() &&
+                       isValidQuizQuestion(request.resource.data);
+      allow update: if isEmailAuth() &&
+                       isTeacherSession() &&
+                       isValidQuizQuestion(request.resource.data);
+      allow delete: if isEmailAuth() &&
+                       isTeacherSession();
+    }
+
+    // 4. Teacher-Published Official Class Study Notes
+    match /classNotes/{noteId} {
+      allow read: if isAuthenticated();
+      allow create: if isEmailAuth() &&
+                       isTeacherSession() &&
+                       isValidClassNote(request.resource.data);
+      allow update: if isEmailAuth() &&
+                       isTeacherSession() &&
+                       isValidClassNote(request.resource.data);
+      allow delete: if isEmailAuth() &&
+                       isTeacherSession();
+    }
+
+    // 5. Default Deny Catch-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
