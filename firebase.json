@@ -9,10 +9,15 @@
     }
   },
   "hosting": {
+    "site": "animal-diet-101",
     "public": ".",
     "ignore": [
       "firebase.json",
       "firestore.rules",
+      ".firebaserc",
+      ".gitignore",
+      ".git/**",
+      ".firebase/**",
       "**/.*",
       "**/node_modules/**"
     ],
