@@ -1,4 +1,4 @@
-/* Animal Diet 101 — Text-to-Speech (Read & Spell) + Precision Bilingual AI Assistant (Diet Buddy) */
+/* Animal Diet 101 — Text-to-Speech (Read & Spell) + High-Precision Bilingual AI Assistant (Diet Buddy) */
 'use strict';
 
 window.AD101_TTS = (() => {
@@ -67,7 +67,7 @@ window.AD101_TTS = (() => {
 
 window.AD101_AI = (() => {
   const GEMINI_KEY_STORE = 'ad101-gemini-key';
-  let lastTopic = null; // remembers { diet?, animalId? } for follow-up questions like "what teeth do they have?"
+  let lastTopic = null; // { diet?, animalId?, foodKey?, offset? }
 
   const getApiKey = () => {
     try { return localStorage.getItem(GEMINI_KEY_STORE) || ''; } catch { return ''; }
@@ -80,7 +80,6 @@ window.AD101_AI = (() => {
     } catch { /* ignore */ }
   };
 
-  // Detailed diet-specific teeth & diet knowledge (EN & BM)
   const TEETH_DETAIL = {
     herbivore: {
       en: {
@@ -109,7 +108,7 @@ window.AD101_AI = (() => {
         details: [
           '**Canines (sharp pointed fangs):** long and pointy to catch, grip, and pierce prey.',
           '**Sharp back teeth:** jagged edges that slice and tear meat like scissors instead of grinding flat.',
-          '**Examples:** lions, tigers, wolves, cats, and sharks (which have rows of sharp triangular teeth).',
+          '**Examples:** lions, tigers, wolves, cats, and sharks (rows of sharp triangular teeth).',
         ],
       },
       ms: {
@@ -118,7 +117,7 @@ window.AD101_AI = (() => {
         details: [
           '**Gigi taring (tajam & runcing):** panjang dan tajam untuk menangkap, mencengkam serta mengoyak daging mangsa.',
           '**Gigi belakang tajam:** memotong dan menyiat daging seperti gunting (bukan rata seperti herbivor).',
-          '**Contoh:** singa, harimau, serigala, kucing dan jerung (mempunyai barisan gigi segi tiga yang tajam).',
+          '**Contoh:** singa, harimau, serigala, kucing dan jerung (barisan gigi segi tiga tajam).',
         ],
       },
     },
@@ -161,7 +160,40 @@ window.AD101_AI = (() => {
     },
   };
 
-  // Typo-tolerant entity extractors
+  const NUMBER_WORDS = {
+    one: 1, satu: 1, seekor: 1,
+    two: 2, dua: 2,
+    three: 3, tiga: 3,
+    four: 4, empat: 4,
+    five: 5, lima: 5,
+    six: 6, enam: 6,
+    seven: 7, tujuh: 7,
+    eight: 8, lapan: 8,
+    nine: 9, sembilan: 9,
+    ten: 10, sepuluh: 10,
+  };
+
+  const extractCount = (ql) => {
+    const digit = ql.match(/\b(\d{1,2})\b/);
+    if (digit) {
+      const n = Number(digit[1]);
+      if (n >= 1 && n <= 20) return n;
+    }
+    for (const [word, val] of Object.entries(NUMBER_WORDS)) {
+      if (new RegExp(`\\b${word}\\b`, 'i').test(ql)) return val;
+    }
+    return null;
+  };
+
+  // Detect if user explicitly typed in BM or EN so replies always match their prompt language
+  const detectLang = (ql, fallback) => {
+    const msHits = (ql.match(/\b(berikan|bagi|saya|haiwan|daripada|apakah|adakah|bagaimana|kenapa|mengapa|makan|makanan|gigi|contoh|sebutkan|namakan|senarai|tumbuhan|daging|bolehkah|perbezaan|beza|kacip|taring|geraham|eja|berapa|banyak|lagi)\b/g) || []).length;
+    const enHits = (ql.match(/\b(give|me|what|which|animals?|from|does|teeth|tooth|eat|eats|eating|examples?|difference|compare|spell|how|why|many|more|name|list|plants?|meat)\b/g) || []).length;
+    if (msHits > enHits) return 'ms';
+    if (enHits > msHits) return 'en';
+    return fallback;
+  };
+
   const extractDiets = (ql) => {
     const found = [];
     if (/\b(herbivor\w*|herbi\w*|plant[- ]?eat\w*|pemakan tumbuhan)\b/.test(ql)) found.push('herbivore');
@@ -178,7 +210,41 @@ window.AD101_AI = (() => {
     return parts;
   };
 
-  // Small alias dictionary for plurals, short forms, and common kids' spellings
+  const FOOD_ALIASES = {
+    grass: ['grass', 'rumput'],
+    leaves: ['leaf', 'leaves', 'daun'],
+    bamboo: ['bamboo', 'buluh'],
+    fruit: ['fruit', 'fruits', 'buah', 'buah-buahan'],
+    banana: ['banana', 'bananas', 'pisang'],
+    berries: ['berry', 'berries', 'beri'],
+    veggies: ['veggie', 'veggies', 'vegetable', 'vegetables', 'carrot', 'carrots', 'sayur', 'lobak'],
+    nuts: ['nut', 'nuts', 'acorn', 'acorns', 'kacang', 'kekacang'],
+    seeds: ['seed', 'seeds', 'biji', 'biji benih'],
+    grain: ['grain', 'grains', 'corn', 'bijirin', 'jagung'],
+    nectar: ['nectar', 'nektar'],
+    fish: ['fish', 'salmon', 'ikan'],
+    meat: ['meat', 'flesh', 'daging'],
+    shrimp: ['shrimp', 'krill', 'udang'],
+    squid: ['squid', 'sotong'],
+    insects: ['insect', 'insects', 'bug', 'bugs', 'serangga'],
+    worms: ['worm', 'worms', 'cacing'],
+    mice: ['mice', 'tikus'],
+    eggs: ['egg', 'eggs', 'telur'],
+    seals: ['seal', 'seals', 'anjing laut'],
+    honey: ['honey', 'madu'],
+  };
+
+  const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  const extractFood = (ql) => {
+    for (const [key, terms] of Object.entries(FOOD_ALIASES)) {
+      for (const term of terms) {
+        if (new RegExp(`\\b${escapeRe(term)}\\b`, 'i').test(ql)) return key;
+      }
+    }
+    return null;
+  };
+
   const ANIMAL_ALIASES = {
     bear: ['bear', 'bears', 'beruang'],
     panda: ['panda', 'pandas'],
@@ -210,8 +276,6 @@ window.AD101_AI = (() => {
     raccoon: ['raccoon', 'raccoons', 'racoon', 'rakun'],
   };
 
-  const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
   const extractAnimals = (ql) => {
     const { ANIMALS } = window.DIET_DATA;
     const I = window.I18N;
@@ -222,8 +286,7 @@ window.AD101_AI = (() => {
       const terms = new Set([a.id, `${a.id}s`, en, `${en}s`, ms, ...(ANIMAL_ALIASES[a.id] || [])]);
       for (const term of terms) {
         if (term.length < 3) continue;
-        const re = new RegExp(`\\b${escapeRe(term)}\\b`, 'i');
-        if (re.test(ql)) {
+        if (new RegExp(`\\b${escapeRe(term)}\\b`, 'i').test(ql)) {
           matched.push(a);
           break;
         }
@@ -237,36 +300,71 @@ window.AD101_AI = (() => {
     return `${info.title}\n${info.summary}\n• ${info.details.join('\n• ')}`;
   };
 
-  const formatDietExamples = (diet, lang) => {
+  const formatDietExamples = (diet, lang, count = 5, rotateMore = false) => {
     const { ANIMALS } = window.DIET_DATA;
     const I = window.I18N;
     const d = I.getDiet(lang, diet);
-    const list = ANIMALS.filter((a) => a.diet === diet).slice(0, 7).map((a) => {
+    const allInDiet = ANIMALS.filter((a) => a.diet === diet);
+    const n = Math.max(1, Math.min(count || 5, allInDiet.length));
+    const prevOffset = (rotateMore && lastTopic?.diet === diet && Number.isInteger(lastTopic.offset))
+      ? lastTopic.offset
+      : 0;
+    const picked = [];
+    for (let i = 0; i < n; i++) {
+      picked.push(allInDiet[(prevOffset + i) % allInDiet.length]);
+    }
+    lastTopic = { diet, offset: (prevOffset + n) % allInDiet.length };
+
+    const lines = picked.map((a, idx) => {
       const loc = I.getAnimal(lang, a);
-      const sampleFood = I.getFood(lang, loc.eats[0]).n.toLowerCase();
-      return `${loc.emoji} **${loc.name}** (${sampleFood})`;
+      const foods = I.joinList(lang, loc.eats.slice(0, 2).map((k) => I.getFood(lang, k).n.toLowerCase()));
+      return `${idx + 1}. ${loc.emoji} **${loc.name}** — ${lang === 'ms' ? 'makan' : 'eats'} ${foods}`;
     });
-    return lang === 'ms'
-      ? `${d.icon} Contoh haiwan **${d.label}** (${d.blurb}):\n• ${list.join('\n• ')}`
-      : `${d.icon} Examples of **${d.label}s** (${d.blurb}):\n• ${list.join('\n• ')}`;
+    const header = lang === 'ms'
+      ? `${d.icon} Berikut ialah **${n} haiwan ${d.label}**:`
+      : `${d.icon} Here ${n === 1 ? 'is' : 'are'} **${n} ${d.label.toLowerCase()}${n === 1 ? '' : 's'}**:`;
+    return `${header}\n${lines.join('\n')}`;
   };
 
-  const localReply = (rawQ, { lang = 'en', role = 'student' } = {}) => {
+  const formatAnimalsEatingFood = (foodKey, lang, count = 5) => {
+    const { ANIMALS } = window.DIET_DATA;
+    const I = window.I18N;
+    const f = I.getFood(lang, foodKey);
+    const matches = ANIMALS.filter((a) => a.eats.includes(foodKey));
+    if (!matches.length) return null;
+    const n = Math.max(1, Math.min(count || 5, matches.length));
+    const lines = matches.slice(0, n).map((a, idx) => {
+      const loc = I.getAnimal(lang, a);
+      const d = I.getDiet(lang, a.diet);
+      return `${idx + 1}. ${loc.emoji} **${loc.name}** (${d.label})`;
+    });
+    return lang === 'ms'
+      ? `🍽️ Haiwan yang makan **${f.n.toLowerCase()}** (${n} daripada ${matches.length}):\n${lines.join('\n')}`
+      : `🍽️ Animals that eat **${f.n.toLowerCase()}** (${n} of ${matches.length}):\n${lines.join('\n')}`;
+  };
+
+  const localReply = (rawQ, { lang: uiLang = 'en', role = 'student' } = {}) => {
     const q = rawQ.trim();
     const ql = q.toLowerCase();
     const I = window.I18N;
+    const lang = detectLang(ql, uiLang);
     const isMs = lang === 'ms';
 
     // Extract entities
     let diets = extractDiets(ql);
     const animals = extractAnimals(ql);
     const toothParts = extractToothParts(ql);
+    const reqCount = extractCount(ql);
+    const foodKey = extractFood(ql);
+    const wantsMore = /\b(more|another|other|lain|lagi)\b/.test(ql);
 
-    // Follow-up context resolution ("what teeth do they have?", "give examples", "apa giginya?")
-    const isFollowUp = /\b(they|them|their|it|its|mereka|ia|dia|nya)\b/.test(ql) ||
-      (diets.length === 0 && animals.length === 0 && toothParts.length === 0 && /\b(example|examples|contoh|teeth|tooth|gigi|eat|makan)\b/.test(ql));
+    // Follow-up context resolution ("give me 3 more", "what teeth do they have?", "bagi 3 lagi")
+    const isFollowUp = wantsMore ||
+      /\b(they|them|their|it|its|mereka|ia|dia|nya)\b/.test(ql) ||
+      (diets.length === 0 && animals.length === 0 && toothParts.length === 0 && !foodKey &&
+        /\b(example\w*|contoh|teeth|tooth|gigi|eat|makan)\b/.test(ql));
     if (isFollowUp && diets.length === 0 && animals.length === 0 && lastTopic) {
-      if (lastTopic.animalId) {
+      if (lastTopic.animalId && !wantsMore) {
         const prevA = window.DIET_DATA.ANIMALS.find((x) => x.id === lastTopic.animalId);
         if (prevA) animals.push(prevA);
       } else if (lastTopic.diet) {
@@ -274,9 +372,8 @@ window.AD101_AI = (() => {
       }
     }
 
-    // Update topic memory when user explicitly names a single animal or single diet
     if (animals.length === 1) lastTopic = { animalId: animals[0].id, diet: animals[0].diet };
-    else if (diets.length === 1) lastTopic = { diet: diets[0] };
+    else if (diets.length === 1 && lastTopic?.diet !== diets[0]) lastTopic = { diet: diets[0], offset: 0 };
 
     // 1. Greetings / Thanks
     if (/^(hi|hello|hey|hai|helo|assalamualaikum|good morning|selamat pagi)\b[!.?]*$/i.test(ql)) {
@@ -309,18 +406,17 @@ window.AD101_AI = (() => {
       }
       if (/\b(activity|aktiviti|game|permainan)\b/.test(ql)) {
         return isMs
-          ? `🎯 Idea Aktiviti Kelas (Animal Diet 101):\n1. **Pusingan Pemanas Badan:** Buka Ensiklopedia dan minta murid guna butang 🔤 Eja untuk 3 haiwan.\n2. **Cabaran Susun! (60 saat):** Murid bermain Susun! dan bandingkan kedudukan di Papan Pendahulu.\n3. **Nota Kelas:** Terbitkan 1 nota ringkas di tab 📝 Urus Nota untuk murid ulang kaji sebelum Kuiz Video.`
-          : `🎯 Classroom Activity Ideas (Animal Diet 101):\n1. **Warm-up:** Have students pick 3 animals in the Encyclopedia and practice with the 🔤 Spell button.\n2. **Sort It! Challenge (60s):** Run a timed sorting race and review the live Leaderboard together.\n3. **Exit Ticket:** Publish a summary note in 📝 Manage Notes and run the 10-question Video Diet Quiz.`;
+          ? `🎯 Idea Aktiviti Kelas (Animal Diet 101):\n1. **Pemanas Badan:** Buka Ensiklopedia dan minta murid guna butang 🔤 Eja untuk 3 haiwan.\n2. **Cabaran Susun! (60 saat):** Murid bermain Susun! dan bandingkan kedudukan di Papan Pendahulu.\n3. **Nota Kelas:** Terbitkan 1 nota ringkas di tab 📝 Urus Nota sebelum Kuiz Video.`
+          : `🎯 Classroom Activity Ideas (Animal Diet 101):\n1. **Warm-up:** Have students pick 3 animals in the Encyclopedia and practice with the 🔤 Spell button.\n2. **Sort It! Challenge (60s):** Run a timed sorting race and review the live Leaderboard together.\n3. **Exit Ticket:** Publish a summary note in 📝 Manage Notes and run the Video Diet Quiz.`;
       }
       return isMs
         ? `👩‍🏫 Tip Mengajar Diet Haiwan (Sains Sekolah Rendah):\n• Fokus pada 3 kumpulan utama: **Herbivor** (tumbuhan sahaja), **Karnivor** (haiwan lain sahaja), dan **Omnivor** (kedua-duanya).\n• Kaitkan diet dengan **kegigian**: gigi kacip (potong), gigi taring (koyak daging), gigi geraham (kisar tumbuhan).\n• Gunakan tab **🧠 Urus Kuiz** dan **📝 Urus Nota** untuk berkongsi soalan & nota khas kelas anda.`
         : `👩‍🏫 Primary Science Teaching Tips (Animal Diet 101):\n• Anchor lessons on the 3 syllabus diets: **Herbivores** (plants only), **Carnivores** (animals only), and **Omnivores** (both).\n• Link diet directly to **dentition**: incisors (cut), canines (tear meat), flat molars (grind plants).\n• Use **🧠 Manage Quiz** and **📝 Manage Notes** to push custom questions and revision sheets straight to your students.`;
     }
 
-    // 4. TEETH / DENTITION INTENT — Strictly scoped to the asked diet, animal, or tooth part!
+    // 4. TEETH / DENTITION INTENT — Strictly scoped to the asked diet, animal, or tooth part
     const asksAboutTeeth = /\b(teeth|tooth|teath|toooth|dentition|gigi|bite|chew|grind|tear|kacip|taring|geraham|incisor\w*|canine\w*|molar\w*|fang\w*)\b/.test(ql);
     if (asksAboutTeeth) {
-      // 4a. Specific single animal's teeth (e.g., "what teeth does a lion have?")
       if (animals.length === 1) {
         const a = I.getAnimal(lang, animals[0]);
         const d = I.getDiet(lang, a.diet);
@@ -329,33 +425,24 @@ window.AD101_AI = (() => {
           ? `${a.emoji} **Gigi ${a.name}** (${d.label}):\n${td.summary}\n• ${td.details[0]}\n• ${td.details[1]}`
           : `${a.emoji} **${a.name} Teeth** (${d.label}):\n${td.summary}\n• ${td.details[0]}\n• ${td.details[1]}`;
       }
-      // 4b. Specific single diet's teeth (e.g., "what kind of teeth are carnivore animal is?")
-      if (diets.length === 1) {
-        return formatDietTeeth(diets[0], lang);
-      }
-      // 4c. Comparing 2 diets' teeth (e.g., "compare herbivore and carnivore teeth")
+      if (diets.length === 1) return formatDietTeeth(diets[0], lang);
       if (diets.length === 2) {
         const d1 = TEETH_DETAIL[diets[0]][isMs ? 'ms' : 'en'];
         const d2 = TEETH_DETAIL[diets[1]][isMs ? 'ms' : 'en'];
         return `${d1.title}: ${d1.summary}\n\n${d2.title}: ${d2.summary}`;
       }
-      // 4d. Specific tooth part (e.g., "what are canines?" / "fungsi gigi geraham")
-      if (toothParts.length === 1) {
-        return TOOTH_PART_INFO[toothParts[0]][isMs ? 'ms' : 'en'];
-      }
-      // 4e. General teeth overview (ONLY when user didn't specify a diet, animal, or tooth part)
+      if (toothParts.length === 1) return TOOTH_PART_INFO[toothParts[0]][isMs ? 'ms' : 'en'];
       return isMs
-        ? `🦷 Kegigian Haiwan Mengikut Diet:\n• **Herbivor:** gigi kacip hadapan & gigi geraham belakang yang rata untuk mengisar tumbuhan.\n• **Karnivor:** gigi taring tajam dan runcing untuk mencengkam serta mengoyak daging.\n• **Omnivor:** mempunyai ketiga-tiga jenis gigi (kacip, taring & geraham rata).\n\nTanya tentang satu kumpulan (cth: "Gigi karnivor macam mana?") untuk penerangan lebih terperinci!`
-        : `🦷 How Animal Teeth Match Each Diet:\n• **Herbivores:** strong incisors & flat, wide molars to cut and grind plants.\n• **Carnivores:** long, sharp pointed canines to grip and tear meat.\n• **Omnivores:** all 3 types — incisors, canines, and flat molars.\n\nAsk about a specific group (e.g., "What teeth do carnivores have?") for a focused breakdown!`;
+        ? `🦷 Kegigian Haiwan Mengikut Diet:\n• **Herbivor:** gigi kacip hadapan & gigi geraham belakang yang rata untuk mengisar tumbuhan.\n• **Karnivor:** gigi taring tajam dan runcing untuk mencengkam serta mengoyak daging.\n• **Omnivor:** mempunyai ketiga-tiga jenis gigi (kacip, taring & geraham rata).`
+        : `🦷 How Animal Teeth Match Each Diet:\n• **Herbivores:** strong incisors & flat, wide molars to cut and grind plants.\n• **Carnivores:** long, sharp pointed canines to grip and tear meat.\n• **Omnivores:** all 3 types — incisors, canines, and flat molars.`;
     }
 
-    // 5. YES / NO CHECK (e.g., "Is a rabbit a carnivore?", "Does a cow eat meat?", "Adakah singa herbivor?")
+    // 5. YES / NO CHECK ("Is a rabbit a carnivore?", "Adakah lembu karnivor?")
     const asksYesNo = /^(is|are|do|does|can|adakah|bolehkah|betulkah)\b/.test(ql);
     if (asksYesNo && animals.length === 1) {
       const a = I.getAnimal(lang, animals[0]);
       const d = I.getDiet(lang, a.diet);
       const foods = I.joinList(lang, a.eats.map((k) => I.getFood(lang, k).n.toLowerCase()));
-      // Check against a diet claim ("Is a rabbit a carnivore?")
       if (diets.length === 1) {
         const askedDiet = diets[0];
         const askedLbl = I.getDiet(lang, askedDiet).label;
@@ -369,7 +456,6 @@ window.AD101_AI = (() => {
           ? `❌ **Tidak.** ${a.emoji} **${a.name}** bukan ${askedLbl.toLowerCase()} — ia ialah haiwan **${d.label}** kerana ia makan ${foods}.`
           : `❌ **No.** A ${a.emoji} **${a.name}** is not ${I.article('en', askedLbl)} ${askedLbl.toLowerCase()} — it is ${I.article('en', d.label)} **${d.label}** because it eats ${foods}.`;
       }
-      // Check against meat vs plants ("Does a cow eat meat?")
       if (/\b(meat|daging|fish|ikan|animals|haiwan)\b/.test(ql)) {
         const eatsAnimals = a.diet === 'carnivore' || a.diet === 'omnivore';
         return isMs
@@ -384,7 +470,43 @@ window.AD101_AI = (() => {
       }
     }
 
-    // 6. COMPARE TWO ANIMALS OR TWO DIETS
+    // 6. COUNT QUESTION ("how many herbivores are there?", "berapa banyak haiwan karnivor?")
+    if (/\b(how many|berapa banyak|berapa ekor|jumlah haiwan)\b/.test(ql)) {
+      if (diets.length === 1) {
+        const dk = diets[0];
+        const d = I.getDiet(lang, dk);
+        const total = window.DIET_DATA.ANIMALS.filter((a) => a.diet === dk).length;
+        return isMs
+          ? `${d.icon} Terdapat **${total} haiwan ${d.label}** dalam Animal Diet 101!`
+          : `${d.icon} There are **${total} ${d.label.toLowerCase()}s** in Animal Diet 101!`;
+      }
+      if (/\b(animals?|haiwan)\b/.test(ql)) {
+        const total = window.DIET_DATA.ANIMALS.length;
+        return isMs
+          ? `🌍 Terdapat **${total} haiwan** kesemuanya dalam Animal Diet 101 (18 herbivor, 14 karnivor, 16 omnivor).`
+          : `🌍 There are **${total} animals** in Animal Diet 101 (18 herbivores, 14 carnivores, 16 omnivores).`;
+      }
+    }
+
+    // 7. LIST / GIVE N ANIMALS OF A DIET
+    // Matches: "berikan saya 3 haiwan daripada herbivor", "give me 3 herbivores", "name 5 carnivore animals",
+    // "sebutkan contoh omnivor", "what animals are herbivores?", "haiwan apa yang karnivor?", "3 more"
+    const asksForExamplesOrList =
+      reqCount !== null ||
+      wantsMore ||
+      /\b(example\w*|list|name|give me|tell me|show me|what animals?|which animals?|contoh|senarai|berikan|bagi|sebutkan|namakan|haiwan apa|apa haiwan|haiwan manakah)\b/.test(ql);
+    if (asksForExamplesOrList && diets.length === 1 && animals.length === 0) {
+      return formatDietExamples(diets[0], lang, reqCount || 5, wantsMore);
+    }
+
+    // 8. REVERSE FOOD LOOKUP ("which animals eat bamboo?", "berikan 3 haiwan yang makan ikan")
+    if (foodKey && animals.length === 0 && diets.length === 0 &&
+      /\b(which|what|who|give|name|list|berikan|bagi|haiwan apa|apa haiwan|siapa|manakah|makan|eat|eats)\b/.test(ql)) {
+      const foodResp = formatAnimalsEatingFood(foodKey, lang, reqCount || 5);
+      if (foodResp) return foodResp;
+    }
+
+    // 9. COMPARE TWO ANIMALS OR TWO DIETS
     const asksCompare = /\b(difference|compare|versus|vs|beza|perbezaan|banding)\b/.test(ql);
     if (asksCompare || diets.length >= 2 || animals.length >= 2) {
       if (animals.length >= 2) {
@@ -414,12 +536,7 @@ window.AD101_AI = (() => {
       }
     }
 
-    // 7. EXAMPLES ONLY for a specific diet ("give examples of carnivore", "contoh herbivor")
-    if (/\b(example\w*|list|name some|contoh|senarai)\b/.test(ql) && diets.length === 1) {
-      return formatDietExamples(diets[0], lang);
-    }
-
-    // 8. SINGLE ANIMAL — Focused by sub-question (what does it eat? / why? / general info)
+    // 10. SINGLE ANIMAL — Focused by sub-question (what does it eat? / why? / general info)
     if (animals.length === 1) {
       const a = I.getAnimal(lang, animals[0]);
       const d = I.getDiet(lang, a.diet);
@@ -440,7 +557,16 @@ window.AD101_AI = (() => {
         : `${a.emoji} **${a.name}** (Spelling: ${spelled})\n• Diet: **${d.label}**\n• Eats: ${foods}.\n• Teeth: ${d.teeth}\n• 💡 ${a.fact}`;
     }
 
-    // 9. SINGLE DIET DEFINITION ("what is a carnivore?", "apa itu herbivor?")
+    // 11. WHAT DOES A DIET EAT? ("what do carnivores eat?", "herbivor makan apa?")
+    if (diets.length === 1 && /\b(eat|eats|eating|food|foods|menu|makan|makanan)\b/.test(ql)) {
+      const dk = diets[0];
+      const d = I.getDiet(lang, dk);
+      return isMs
+        ? `${d.icon} **Makanan ${d.label}:**\n${d.blurb}`
+        : `${d.icon} **What ${d.label}s Eat:**\n${d.blurb}`;
+    }
+
+    // 12. SINGLE DIET DEFINITION ("what is a carnivore?", "apa itu herbivor?")
     if (diets.length === 1) {
       const dk = diets[0];
       const d = I.getDiet(lang, dk);
@@ -452,7 +578,7 @@ window.AD101_AI = (() => {
         : `${d.icon} **${d.label}** (Spelling: ${spelled})\n• **Meaning:** ${d.blurb}\n• **Teeth:** ${d.teeth}\n• **Examples:** ${exNames}.`;
     }
 
-    // 10. SPECIFIC ENRICHMENT / BONUS TERMS (answers ONLY the asked term!)
+    // 13. SPECIFIC ENRICHMENT / BONUS TERMS
     const ENRICH = [
       [/\b(insectivor\w*|insektivor)\b/, '🦗 **Insectivore** (bonus term): an animal that eats mainly insects, like frogs, spiders, and ladybugs.', '🦗 **Insektivor** (istilah bonus): haiwan yang makan serangga sebagai makanan utama, seperti katak, labah-labah dan kumbang kura-kura.'],
       [/\b(piscivor\w*|piskivor)\b/, '🐟 **Piscivore** (bonus term): an animal that eats mainly fish, like penguins and dolphins.', '🐟 **Piskivor** (istilah bonus): haiwan yang makan ikan sebagai makanan utama, seperti penguin dan lumba-lumba.'],
@@ -465,10 +591,10 @@ window.AD101_AI = (() => {
       if (re.test(ql)) return isMs ? msTxt : enTxt;
     }
 
-    // 11. Concise guided fallback
+    // 14. Concise guided fallback
     return isMs
-      ? `🤖 Saya belum pasti soalan spesifik itu — cuba tanya dengan lebih khusus, contohnya:\n• "Apakah jenis gigi haiwan karnivor?"\n• "Adakah arnab karnivor?"\n• "Apa makanan panda?"\n• "Bagaimana eja herbivor?"\n${role === 'teacher' ? '• "Berikan idea soalan kuiz sekolah rendah"' : ''}`
-      : `🤖 I want to give you an exact answer! Try asking something specific like:\n• "What kind of teeth do carnivores have?"\n• "Is a rabbit a carnivore?"\n• "What does a panda eat?"\n• "How do you spell herbivore?"\n${role === 'teacher' ? '• "Give me primary syllabus quiz question ideas"' : ''}`;
+      ? `🤖 Saya mahu beri jawapan yang tepat! Cuba tanya soalan khusus seperti:\n• "Berikan saya 3 haiwan daripada herbivor"\n• "Apakah jenis gigi haiwan karnivor?"\n• "Haiwan apa yang makan ikan?"\n• "Adakah arnab karnivor?"\n• "Bagaimana eja omnivor?"\n${role === 'teacher' ? '• "Berikan idea soalan kuiz sekolah rendah"' : ''}`
+      : `🤖 I want to give you an exact answer! Try asking something specific like:\n• "Give me 3 herbivore animals"\n• "What kind of teeth do carnivores have?"\n• "Which animals eat fish?"\n• "Is a rabbit a carnivore?"\n• "How do you spell omnivore?"\n${role === 'teacher' ? '• "Give me primary syllabus quiz question ideas"' : ''}`;
   };
 
   async function ask(question, ctx = {}) {
@@ -476,9 +602,10 @@ window.AD101_AI = (() => {
     const key = getApiKey();
     if (key) {
       try {
-        const sysPrompt = lang === 'ms'
-          ? `Anda ialah Diet Buddy, pembantu AI tepat dan mesra untuk permainan sains sekolah rendah "Animal Diet 101". Jawab HANYA soalan spesifik yang ditanya dalam Bahasa Melayu yang jelas untuk ${role === 'teacher' ? 'guru sekolah rendah' : 'murid sekolah rendah'}. Jangan senaraikan diet lain jika pengguna hanya bertanya tentang satu diet atau satu haiwan. Pastikan jawapan padat (2-4 ayat).`
-          : `You are Diet Buddy, a precise, friendly AI assistant for the primary school science game "Animal Diet 101". Answer ONLY the specific question asked in clear English for a ${role === 'teacher' ? 'primary school teacher' : 'primary school student'}. Do not list other diets when the user asks about only one diet or one animal. Keep answers focused (2-4 sentences).`;
+        const replyLang = detectLang(question.toLowerCase(), lang);
+        const sysPrompt = replyLang === 'ms'
+          ? `Anda ialah Diet Buddy, pembantu AI tepat untuk permainan sains sekolah rendah "Animal Diet 101". Jawab HANYA apa yang ditanya (cth: jika pengguna minta 3 haiwan, senaraikan tepat 3 haiwan sahaja) dalam Bahasa Melayu yang jelas untuk ${role === 'teacher' ? 'guru' : 'murid'} sekolah rendah.`
+          : `You are Diet Buddy, a precise AI assistant for the primary school science game "Animal Diet 101". Answer ONLY what was asked (e.g., if asked for 3 animals, list exactly 3 animals) in clear English for a primary school ${role === 'teacher' ? 'teacher' : 'student'}.`;
         const resp = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`,
           {
